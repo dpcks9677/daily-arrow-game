@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight } from 'lucide-react'
 import { generateDailyArrows, getOrCreateDeviceId, getByteLength, getDailySeed } from './utils'
-import { collection, doc, setDoc, getDocs, query, orderBy, limit } from 'firebase/firestore'
+import { collection, doc, setDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
 import { db } from './firebase'
 import './App.css'
 
@@ -43,8 +43,18 @@ function App() {
 }
 
 function StartScreen({ onPlay, onLeaderboard }) {
+  const [showHelp, setShowHelp] = useState(false);
+
   return (
     <div className="start-screen">
+      <div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+        <button 
+          onClick={() => setShowHelp(true)}
+          style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+        >
+          ?
+        </button>
+      </div>
       <h1>Daily Arrow</h1>
       <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요! (매일 자정 갱신)</p>
       
@@ -52,6 +62,23 @@ function StartScreen({ onPlay, onLeaderboard }) {
         <button className="primary-btn" onClick={onPlay}>Play</button>
         <button className="secondary-btn" onClick={onLeaderboard}>Leaderboard</button>
       </div>
+
+      {showHelp && (
+        <div className="modal-overlay" onClick={() => setShowHelp(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+              <button className="close-btn" onClick={() => setShowHelp(false)}>✕</button>
+              <h2 style={{ fontSize: '1.87rem' }}>게임 도움말</h2>
+              <div style={{ textAlign: 'left', color: '#cbd5e1', lineHeight: '1.7', marginTop: '1.5rem', fontSize: '0.85rem', background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                <ul style={{ paddingLeft: '1.2rem', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <li>키보드의 방향키(↑, ↓, ←, →)를 사용하여 화면의 화살표를 똑같이 입력하세요.</li>
+                  <li>방향키를 잘못 누르면 0.5초 동안 입력할 수 없게 됩니다.</li>
+                  <li>매일 자정마다 화살표 세트가 바뀝니다.</li>
+                  <li>실수 없이 가장 빠르게 클리어하여 랭킹에 도전해 보세요!</li>
+                </ul>
+              </div>
+            </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -87,7 +114,7 @@ function GameScreen({ onHome, onLeaderboard }) {
   useEffect(() => {
     if (gameStatus === 'playing') {
       timerRef.current = setInterval(() => {
-        setTimeElapsed(Date.now() - startTime)
+        setTimeElapsed(performance.now() - startTime)
       }, 10)
     } else {
       clearInterval(timerRef.current)
@@ -105,7 +132,7 @@ function GameScreen({ onHome, onLeaderboard }) {
 
     if (gameStatus === 'waiting') {
       setGameStatus('playing')
-      setStartTime(Date.now())
+      setStartTime(performance.now())
     }
 
     const expectedArrow = arrows[currentIndex];
@@ -161,12 +188,14 @@ function GameScreen({ onHome, onLeaderboard }) {
       const dailySeed = getDailySeed().toString();
       localStorage.setItem('arrow_game_nickname', nickname.trim());
       
-      const docRef = doc(db, 'leaderboard', dailySeed, 'scores', deviceId);
-      await setDoc(docRef, {
+      const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
+      const newDocRef = doc(scoresRef); // 고유 ID 자동 생성 (중복 등록 허용)
+      await setDoc(newDocRef, {
+        deviceId: deviceId,
         nickname: nickname.trim(),
         time: Number((timeElapsed / 1000).toFixed(2)),
         mistakes: mistakes,
-        timestamp: Date.now()
+        timestamp: serverTimestamp()
       });
       setIsSaved(true);
       alert("점수가 성공적으로 등록되었습니다!");
@@ -195,7 +224,9 @@ function GameScreen({ onHome, onLeaderboard }) {
       <div className={`game-content ${isStunned ? 'stunned' : ''}`} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div className="game-header" style={{ justifyContent: 'space-between' }}>
         <button className="back-btn" onClick={onHome}>← Home</button>
-        <button className="back-btn" style={{ color: '#fbbf24' }} onClick={handleDebugSkip}>Skip (Debug)</button>
+        {import.meta.env.DEV && (
+          <button className="back-btn" style={{ color: '#fbbf24' }} onClick={handleDebugSkip}>Skip (Debug)</button>
+        )}
       </div>
 
       <div className="status-bar">
@@ -298,23 +329,44 @@ function LeaderboardScreen({ onHome }) {
           <table className="leaderboard-table">
             <thead>
               <tr>
-                <th>Rank</th>
+                <th style={{ width: '80px' }}>Rank</th>
                 <th>Name</th>
                 <th>Time</th>
                 <th>Mistakes</th>
+                <th>TIMESTAMP</th>
               </tr>
             </thead>
             <tbody>
-              {scores.map((player) => (
-                <tr key={player.id}>
-                  <td>{player.rank}</td>
-                  <td>{player.nickname}</td>
-                  <td>{player.time}s</td>
-                  <td>{player.mistakes}</td>
-                </tr>
-              ))}
+              {scores.map((player) => {
+                const date = player.timestamp?.toDate ? player.timestamp.toDate() : (player.timestamp ? new Date(player.timestamp) : new Date());
+                const hours = date.getHours().toString().padStart(2, '0');
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                const timeString = `${hours}:${minutes}`;
+                
+                const getMedal = (rank) => {
+                  if (rank === 1) return '🥇';
+                  if (rank === 2) return '🥈';
+                  if (rank === 3) return '🥉';
+                  return '';
+                };
+                
+                return (
+                  <tr key={player.id}>
+                    <td>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '60px' }}>
+                        <span style={{ fontSize: '1.2em' }}>{getMedal(player.rank)}</span>
+                        <span>{player.rank}</span>
+                      </div>
+                    </td>
+                    <td>{player.nickname}</td>
+                    <td>{Number(player.time).toFixed(2)}s</td>
+                    <td>{player.mistakes}</td>
+                    <td>{timeString}</td>
+                  </tr>
+                );
+              })}
               {scores.length === 0 && (
-                <tr><td colSpan="4" style={{textAlign:'center'}}>아직 등록된 기록이 없습니다!</td></tr>
+                <tr><td colSpan="5" style={{textAlign:'center'}}>아직 등록된 기록이 없습니다!</td></tr>
               )}
             </tbody>
           </table>
