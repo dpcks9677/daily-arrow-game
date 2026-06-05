@@ -273,6 +273,28 @@ h1 {
   padding: 1.5rem;
   margin-bottom: 2rem;
   backdrop-filter: blur(10px);
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+/* Custom Scrollbar for leaderboard */
+.leaderboard-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.leaderboard-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  margin: 1rem 0; /* 패딩 안쪽에서 스크롤바가 예쁘게 보이도록 마진 추가 */
+}
+
+.leaderboard-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.leaderboard-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .leaderboard-table {

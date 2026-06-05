@@ -10,7 +10,7 @@ export function getOrCreateDeviceId() {
 export function getByteLength(str) {
   let byteLen = 0;
   for (let i = 0; i < str.length; i++) {
-    byteLen += str.charCodeAt(i) > 127 ? 2 : 1;
+    byteLen += str.charCodeAt(i) > 127 ? 2.5 : 1;
   }
   return byteLen;
 }

@@ -97,6 +97,7 @@ function GameScreen({ onHome, onLeaderboard }) {
   const [nickname, setNickname] = useState(() => localStorage.getItem('arrow_game_nickname') || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [showNicknameWarning, setShowNicknameWarning] = useState(false)
   
   const timerRef = useRef(null)
 
@@ -177,6 +178,9 @@ function GameScreen({ onHome, onLeaderboard }) {
     const val = e.target.value;
     if (getByteLength(val) <= 20) {
       setNickname(val);
+      setShowNicknameWarning(false);
+    } else {
+      setShowNicknameWarning(true);
     }
   }
 
@@ -263,10 +267,12 @@ function GameScreen({ onHome, onLeaderboard }) {
                     type="text" 
                     value={nickname} 
                     onChange={handleNicknameChange} 
-                    placeholder="닉네임 (한글 10자, 영문 20자)"
+                    placeholder="닉네임 (한글 8자, 영문 20자)"
                     className="nickname-input"
                   />
-                  <p className="byte-count">{getByteLength(nickname)} / 20 bytes</p>
+                  <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: 0, minHeight: '1.2rem', visibility: showNicknameWarning ? 'visible' : 'hidden' }}>
+                    한글은 8글자까지, 영어는 20자까지 입력 가능합니다
+                  </p>
                   <button onClick={saveScore} disabled={isSubmitting || !nickname.trim()} className="primary-btn submit-btn">
                     {isSubmitting ? '등록 중...' : '점수 등록하기'}
                   </button>
@@ -330,19 +336,13 @@ function LeaderboardScreen({ onHome }) {
             <thead>
               <tr>
                 <th style={{ width: '80px' }}>Rank</th>
-                <th>Name</th>
+                <th style={{ width: '40%' }}>Name</th>
                 <th>Time</th>
                 <th>Mistakes</th>
-                <th>TIMESTAMP</th>
               </tr>
             </thead>
             <tbody>
               {scores.map((player) => {
-                const date = player.timestamp?.toDate ? player.timestamp.toDate() : (player.timestamp ? new Date(player.timestamp) : new Date());
-                const hours = date.getHours().toString().padStart(2, '0');
-                const minutes = date.getMinutes().toString().padStart(2, '0');
-                const timeString = `${hours}:${minutes}`;
-                
                 const getMedal = (rank) => {
                   if (rank === 1) return '🥇';
                   if (rank === 2) return '🥈';
@@ -361,12 +361,11 @@ function LeaderboardScreen({ onHome }) {
                     <td>{player.nickname}</td>
                     <td>{Number(player.time).toFixed(2)}s</td>
                     <td>{player.mistakes}</td>
-                    <td>{timeString}</td>
                   </tr>
                 );
               })}
               {scores.length === 0 && (
-                <tr><td colSpan="5" style={{textAlign:'center'}}>아직 등록된 기록이 없습니다!</td></tr>
+                <tr><td colSpan="4" style={{textAlign:'center'}}>아직 등록된 기록이 없습니다!</td></tr>
               )}
             </tbody>
           </table>
