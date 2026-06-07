@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
-import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check } from 'lucide-react'
+import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame } from 'lucide-react'
 import { generateDailyArrows, getOrCreateDeviceId, getByteLength, getDailySeed, generateBackupCode } from './utils'
 import { collection, doc, setDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
 import { db } from './firebase'
@@ -28,6 +28,23 @@ const triggerConfetti = () => {
     angle: 120,
     origin: { x: 1, y: 0.45 }
   });
+};
+
+const getStreakStatus = (userProfile) => {
+  if (!userProfile || !userProfile.lastPlayedDate) {
+    return { isActive: false, streak: 0 };
+  }
+  const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+  const todayStr = kstNow.toISOString().split('T')[0];
+  const today = new Date(todayStr);
+  const last = new Date(userProfile.lastPlayedDate);
+  const diffDaysStr = Math.round((today - last) / (1000 * 60 * 60 * 24));
+  
+  if (diffDaysStr <= 1) {
+    return { isActive: true, streak: userProfile.currentStreak || 1 };
+  } else {
+    return { isActive: false, streak: 0 };
+  }
 };
 
 function App() {
@@ -73,7 +90,7 @@ function App() {
   return (
     <div className="app-container">
       {currentScreen === 'start' && <StartScreen onPlay={() => setCurrentScreen('game')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} />}
-      {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} />}
+      {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>
   )
@@ -186,12 +203,23 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
     }
   };
 
+  const { isActive, streak } = getStreakStatus(userProfile);
+
   return (
     <div className="start-screen">
-      <div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '1rem' }}>
-        <button 
-          className="icon-btn"
-          onClick={() => setShowProfile(true)}
+      <div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'default' }}>
+          <Flame size={32} color={isActive ? '#ef4444' : '#64748b'} fill={isActive ? '#f97316' : 'transparent'} />
+          <span style={{ fontWeight: 900, fontSize: '1.4rem', color: isActive ? '#f97316' : '#64748b', letterSpacing: '-1px' }}>
+            {isActive ? `DAY ${streak}` : 'NO STREAK'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button 
+            className="icon-btn"
+            onClick={() => setShowProfile(true)}
           style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
         >
           <User size={24} />
@@ -209,7 +237,8 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
           style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
         >
           <HelpCircle size={24} />
-        </button>
+          </button>
+        </div>
       </div>
       <h1>Daily Arrow</h1>
       <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요! (매일 자정 갱신)</p>
@@ -330,7 +359,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
   )
 }
 
-function GameScreen({ onHome, onLeaderboard }) {
+function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile }) {
   const [arrows, setArrows] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [gameStatus, setGameStatus] = useState('waiting') // 'waiting', 'playing', 'finished'
@@ -448,6 +477,38 @@ function GameScreen({ onHome, onLeaderboard }) {
         mistakes: mistakes,
         timestamp: serverTimestamp()
       });
+
+      const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+      const todayStr = kstNow.toISOString().split('T')[0];
+      let newStreak = 1;
+
+      if (userProfile && userProfile.lastPlayedDate) {
+        const today = new Date(todayStr);
+        const last = new Date(userProfile.lastPlayedDate);
+        const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) {
+          newStreak = userProfile.currentStreak || 1;
+        } else if (diffDays === 1) {
+          newStreak = (userProfile.currentStreak || 1) + 1;
+        } else {
+          newStreak = 1;
+        }
+      }
+
+      await setDoc(doc(db, 'users', deviceId), {
+        nickname: nickname.trim(),
+        currentStreak: newStreak,
+        lastPlayedDate: todayStr
+      }, { merge: true });
+
+      setUserProfile(prev => ({ 
+        ...prev, 
+        nickname: nickname.trim(), 
+        currentStreak: newStreak, 
+        lastPlayedDate: todayStr 
+      }));
+
       setIsSaved(true);
       alert("점수가 성공적으로 등록되었습니다!");
       onLeaderboard();
