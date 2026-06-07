@@ -152,15 +152,30 @@ function App() {
         const userRef = doc(db, 'users', deviceId);
         const userSnap = await getDoc(userRef);
 
+        const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+        const todayStr = kstNow.toISOString().split('T')[0];
+
         if (userSnap.exists()) {
-          setUserProfile({ id: deviceId, ...userSnap.data() });
+          const data = userSnap.data();
+          setUserProfile({ 
+            id: deviceId, 
+            totalPlayCount: data.totalPlayCount || 0,
+            longestStreak: data.longestStreak || data.currentStreak || 1,
+            gameStartDate: data.gameStartDate || todayStr,
+            bestRecords: data.bestRecords || [],
+            ...data 
+          });
         } else {
           const newProfile = {
             backupCode: null,
             nickname: localStorage.getItem('arrow_game_nickname') || '',
             currentStreak: 1,
             lastPlayedDate: '',
-            achievements: []
+            achievements: [],
+            totalPlayCount: 0,
+            longestStreak: 1,
+            gameStartDate: todayStr,
+            bestRecords: []
           };
           setUserProfile({ id: deviceId, ...newProfile, isNew: true });
         }
@@ -279,6 +294,10 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         currentStreak: userProfile?.currentStreak || 1,
         lastPlayedDate: userProfile?.lastPlayedDate || '',
         achievements: userProfile?.achievements || [],
+        totalPlayCount: userProfile?.totalPlayCount || 0,
+        longestStreak: userProfile?.longestStreak || userProfile?.currentStreak || 1,
+        gameStartDate: userProfile?.gameStartDate || new Date(new Date().getTime() + 9 * 60 * 60 * 1000).toISOString().split('T')[0],
+        bestRecords: userProfile?.bestRecords || [],
         createdAt: serverTimestamp() // 최초 등록 시간 기록
       };
 
@@ -394,7 +413,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
           <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
           <button onClick={async () => {
              const deviceId = userProfile.id;
-             const resetData = { achievements: [], currentStreak: 1, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '' };
+             const resetData = { achievements: [], currentStreak: 1, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 1, bestRecords: [] };
              await setDoc(doc(db, 'users', deviceId), resetData, { merge: true });
              setUserProfile(p => ({...p, ...resetData}));
           }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
@@ -425,7 +444,21 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
                const updatedAchievements = [...currentAchievements, ...actualNew];
 
-               const updates = { todayClearDate: todayStr, todayClearCount: newTodayCount, achievements: updatedAchievements };
+               const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
+               const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+               const newBestRecords = [...(userProfile?.bestRecords || []), currentRecord]
+                 .sort((a, b) => {
+                   if (a.time !== b.time) return a.time - b.time;
+                   return a.mistakes - b.mistakes;
+                 }).slice(0, 3);
+                 
+               const updates = { 
+                 todayClearDate: todayStr, 
+                 todayClearCount: newTodayCount, 
+                 achievements: updatedAchievements,
+                 totalPlayCount: newTotalPlayCount,
+                 bestRecords: newBestRecords
+               };
                await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
                setUserProfile(p => ({...p, ...updates}));
                if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
@@ -453,7 +486,8 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
              const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
              const updatedAchievements = [...currentAchievements, ...actualNew];
 
-             const updates = { currentStreak: newStreak, lastPlayedDate: todayStr, achievements: updatedAchievements };
+             const newLongestStreak = Math.max(userProfile?.longestStreak || 1, newStreak);
+             const updates = { currentStreak: newStreak, lastPlayedDate: todayStr, achievements: updatedAchievements, longestStreak: newLongestStreak };
              await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
              setUserProfile(p => ({...p, ...updates}));
              if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
@@ -667,10 +701,21 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
           const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
           const updatedAchievements = [...currentAchievements, ...actualNew];
 
+          const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
+          const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+          const newBestRecords = [...(userProfile.bestRecords || []), currentRecord]
+            .sort((a, b) => {
+              if (a.time !== b.time) return a.time - b.time;
+              return a.mistakes - b.mistakes;
+            })
+            .slice(0, 3);
+
           const updates = {
             todayClearDate: todayStr,
             todayClearCount: newTodayCount,
-            achievements: updatedAchievements
+            achievements: updatedAchievements,
+            totalPlayCount: newTotalPlayCount,
+            bestRecords: newBestRecords
           };
 
           await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
@@ -798,19 +843,21 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
       const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
       const updatedAchievements = [...currentAchievements, ...actualNew];
 
-      await setDoc(doc(db, 'users', deviceId), {
+      const newLongestStreak = Math.max(userProfile?.longestStreak || 1, newStreak);
+
+      const updates = {
         nickname: nickname.trim(),
         currentStreak: newStreak,
         lastPlayedDate: todayStr,
-        achievements: updatedAchievements
-      }, { merge: true });
+        achievements: updatedAchievements,
+        longestStreak: newLongestStreak
+      };
+
+      await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
 
       setUserProfile(prev => ({ 
         ...prev, 
-        nickname: nickname.trim(), 
-        currentStreak: newStreak, 
-        lastPlayedDate: todayStr,
-        achievements: updatedAchievements
+        ...updates
       }));
       if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
 
