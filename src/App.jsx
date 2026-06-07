@@ -69,16 +69,15 @@ function App() {
       if (userSnap.exists()) {
         setUserProfile({ id: deviceId, ...userSnap.data() });
       } else {
+        // DB에 즉시 쓰지 않고, 로컬 상태로만 유지합니다. (정크 데이터 생성 방지)
+        // 유저가 닉네임을 저장하거나, 백업코드를 발급받거나, 점수를 등록할 때 { merge: true }를 통해 지연 생성(Lazy creation)됩니다.
         const newProfile = {
           backupCode: null,
           nickname: localStorage.getItem('arrow_game_nickname') || '',
-          createdAt: serverTimestamp(),
-          // v.0.3.0 placeholders
           currentStreak: 1,
           lastPlayedDate: '',
           achievements: []
         };
-        await setDoc(userRef, newProfile);
         setUserProfile({ id: deviceId, ...newProfile, isNew: true });
       }
     };
