@@ -62,10 +62,76 @@ const getStreakStatus = (userProfile) => {
   }
 };
 
+function AchievementPopupContainer({ popups, setPopups }) {
+  if (!popups || popups.length === 0) return null;
+
+  const handleClose = (id) => {
+    setPopups(prev => prev.filter(p => p !== id));
+  };
+
+  const handleCloseSummary = () => {
+    setPopups(prev => prev.slice(0, 2)); // keep only the first 2, remove the rest
+  };
+
+  const displayPopups = [];
+  if (popups.length <= 3) {
+    displayPopups.push(...popups);
+  } else {
+    displayPopups.push(popups[0], popups[1]);
+  }
+
+  const remainingCount = popups.length > 3 ? popups.length - 2 : 0;
+
+  return (
+    <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 10000, display: 'flex', flexDirection: 'column', gap: '0.8rem', pointerEvents: 'none' }}>
+      {displayPopups.map((achId) => {
+        const ach = ACHIEVEMENTS.find(a => a.id === achId);
+        if (!ach) return null;
+        return (
+          <div key={ach.id} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(30, 58, 138, 0.95)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
+            <button onClick={() => handleClose(ach.id)} style={{ position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✕</button>
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid rgba(245, 158, 11, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+              <Trophy size={20} color="#f59e0b" />
+            </div>
+            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <p style={{ margin: 0, fontWeight: 'bold', fontSize: '0.85rem', color: '#f59e0b' }}>도전과제 달성!</p>
+              <p style={{ margin: 0, fontSize: '0.95rem', color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{ach.title}</p>
+            </div>
+          </div>
+        );
+      })}
+      {remainingCount > 0 && (
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(30, 58, 138, 0.95)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
+          <button onClick={handleCloseSummary} style={{ position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✕</button>
+          <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid rgba(245, 158, 11, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+            <Trophy size={20} color="#f59e0b" />
+          </div>
+          <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.2rem', justifyContent: 'center', height: '100%' }}>
+            <p style={{ margin: 0, fontWeight: 'bold', fontSize: '0.95rem', color: '#f59e0b' }}>+{remainingCount}개의 도전과제 달성!</p>
+          </div>
+        </div>
+      )}
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function App() {
   const [currentScreen, setCurrentScreen] = useState('start') // 'start', 'game', 'leaderboard'
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
+  const [unlockedPopups, setUnlockedPopups] = useState([]);
+
+  useEffect(() => {
+    if (currentScreen === 'start') {
+      setUnlockedPopups([]);
+    }
+  }, [currentScreen]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -103,14 +169,17 @@ function App() {
 
   return (
     <div className="app-container">
-      {currentScreen === 'start' && <StartScreen onPlay={() => setCurrentScreen('game')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} />}
-      {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} />}
+      {unlockedPopups.length > 0 && (
+        <AchievementPopupContainer popups={unlockedPopups} setPopups={setUnlockedPopups} />
+      )}
+      {currentScreen === 'start' && <StartScreen onPlay={() => setCurrentScreen('game')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} setUnlockedPopups={setUnlockedPopups} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>
   )
 }
 
-function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile }) {
+function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, setUnlockedPopups }) {
   const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
@@ -340,6 +409,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                const updates = { todayClearDate: todayStr, todayClearCount: newTodayCount, achievements: updatedAchievements };
                await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
                setUserProfile(p => ({...p, ...updates}));
+               if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
             }} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', flex: 1, whiteSpace: 'nowrap' }}>
               게임 완료 트리거
             </button>
@@ -367,6 +437,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
              const updates = { currentStreak: newStreak, lastPlayedDate: todayStr, achievements: updatedAchievements };
              await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
              setUserProfile(p => ({...p, ...updates}));
+             if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
           }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
             점수 등록 트리거 (스트릭 +1 강제 반영)
           </button>
@@ -510,7 +581,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
   )
 }
 
-function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile }) {
+function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnlockedPopups }) {
   const [arrows, setArrows] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [gameStatus, setGameStatus] = useState('waiting') // 'waiting', 'playing', 'finished'
@@ -585,6 +656,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile }) {
 
           await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
           setUserProfile(prev => ({ ...prev, ...updates }));
+          if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
         } catch (e) {
           console.error('Error updating clear achievements:', e);
         }
@@ -721,6 +793,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile }) {
         lastPlayedDate: todayStr,
         achievements: updatedAchievements
       }));
+      if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
 
       setIsSaved(true);
       alert("점수가 성공적으로 등록되었습니다!");
