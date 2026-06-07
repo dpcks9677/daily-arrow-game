@@ -445,19 +445,11 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                const updatedAchievements = [...currentAchievements, ...actualNew];
 
                const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
-               const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
-               const newBestRecords = [...(userProfile?.bestRecords || []), currentRecord]
-                 .sort((a, b) => {
-                   if (a.time !== b.time) return a.time - b.time;
-                   return a.mistakes - b.mistakes;
-                 }).slice(0, 3);
-                 
                const updates = { 
                  todayClearDate: todayStr, 
                  todayClearCount: newTodayCount, 
                  achievements: updatedAchievements,
-                 totalPlayCount: newTotalPlayCount,
-                 bestRecords: newBestRecords
+                 totalPlayCount: newTotalPlayCount
                };
                await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
                setUserProfile(p => ({...p, ...updates}));
@@ -487,7 +479,17 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
              const updatedAchievements = [...currentAchievements, ...actualNew];
 
              const newLongestStreak = Math.max(userProfile?.longestStreak || 1, newStreak);
-             const updates = { currentStreak: newStreak, lastPlayedDate: todayStr, achievements: updatedAchievements, longestStreak: newLongestStreak };
+
+             const timeSec = Number(debugTime) || 10;
+             const mistakes = Number(debugMistakes) || 0;
+             const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+             const newBestRecords = [...(userProfile?.bestRecords || []), currentRecord]
+               .sort((a, b) => {
+                 if (a.time !== b.time) return a.time - b.time;
+                 return a.mistakes - b.mistakes;
+               }).slice(0, 3);
+
+             const updates = { currentStreak: newStreak, lastPlayedDate: todayStr, achievements: updatedAchievements, longestStreak: newLongestStreak, bestRecords: newBestRecords };
              await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
              setUserProfile(p => ({...p, ...updates}));
              if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
@@ -702,20 +704,11 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
           const updatedAchievements = [...currentAchievements, ...actualNew];
 
           const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
-          const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
-          const newBestRecords = [...(userProfile.bestRecords || []), currentRecord]
-            .sort((a, b) => {
-              if (a.time !== b.time) return a.time - b.time;
-              return a.mistakes - b.mistakes;
-            })
-            .slice(0, 3);
-
           const updates = {
             todayClearDate: todayStr,
             todayClearCount: newTodayCount,
             achievements: updatedAchievements,
-            totalPlayCount: newTotalPlayCount,
-            bestRecords: newBestRecords
+            totalPlayCount: newTotalPlayCount
           };
 
           await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
@@ -845,12 +838,22 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
 
       const newLongestStreak = Math.max(userProfile?.longestStreak || 1, newStreak);
 
+      const timeSec = Number((timeElapsed / 1000).toFixed(2));
+      const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+      const newBestRecords = [...(userProfile?.bestRecords || []), currentRecord]
+        .sort((a, b) => {
+          if (a.time !== b.time) return a.time - b.time;
+          return a.mistakes - b.mistakes;
+        })
+        .slice(0, 3);
+
       const updates = {
         nickname: nickname.trim(),
         currentStreak: newStreak,
         lastPlayedDate: todayStr,
         achievements: updatedAchievements,
-        longestStreak: newLongestStreak
+        longestStreak: newLongestStreak,
+        bestRecords: newBestRecords
       };
 
       await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
