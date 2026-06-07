@@ -285,7 +285,7 @@ h1 {
 .leaderboard-container::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
-  margin: 1rem 0; /* 패딩 안쪽에서 스크롤바가 예쁘게 보이도록 마진 추가 */
+  margin: 1rem 0; /* ?⑤뵫 ?덉そ?먯꽌 ?ㅽ겕濡ㅻ컮媛 ?덉걯寃?蹂댁씠?꾨줉 留덉쭊 異붽? */
 }
 
 .leaderboard-container::-webkit-scrollbar-thumb {
@@ -380,4 +380,122 @@ h1 {
   cursor: not-allowed;
   transform: none !important;
   box-shadow: none !important;
+}
+
+
+body.light-mode {
+  background: radial-gradient(circle at top, #f8fafc 0%, #e2e8f0 100%);
+  color: #0f172a;
+  color-scheme: light;
+}
+body.light-mode h1 {
+  background: -webkit-linear-gradient(45deg, #0ea5e9, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+body.light-mode .subtitle {
+  color: #475569;
+}
+body.light-mode .icon-btn {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  color: #475569 !important;
+}
+body.light-mode .icon-btn:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #0f172a !important;
+}
+body.light-mode .secondary-btn {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1e293b;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+body.light-mode .secondary-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.1);
+}
+body.light-mode .back-btn {
+  color: #475569;
+}
+body.light-mode .back-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #0f172a;
+}
+body.light-mode .status-bar {
+  color: #475569;
+}
+body.light-mode .grid-container {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
+}
+body.light-mode .arrow-box {
+  background: rgba(0, 0, 0, 0.05);
+  color: #475569;
+}
+body.light-mode .arrow-box.pending {
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+body.light-mode .arrow-box.current {
+  background: rgba(59, 130, 246, 0.15);
+}
+body.light-mode .arrow-box.correct {
+  background: rgba(74, 222, 128, 0.2);
+}
+body.light-mode .arrow-box.error {
+  background: rgba(239, 68, 68, 0.2);
+}
+body.light-mode .modal-overlay {
+  background: rgba(255, 255, 255, 0.6);
+}
+body.light-mode .modal {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+}
+body.light-mode .modal h2 {
+  color: #0f172a;
+}
+body.light-mode .modal p {
+  color: #334155;
+}
+body.light-mode .close-btn {
+  color: #475569;
+}
+body.light-mode .close-btn:hover {
+  color: #0f172a;
+}
+body.light-mode .leaderboard-container {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+body.light-mode .leaderboard-table th {
+  color: #475569;
+}
+body.light-mode .leaderboard-table th, body.light-mode .leaderboard-table td {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+body.light-mode .leaderboard-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+body.light-mode .nickname-section {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+body.light-mode .nickname-input {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.5);
+  color: #0f172a;
+}
+body.light-mode .leaderboard-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+body.light-mode .leaderboard-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+body.light-mode .leaderboard-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+body.light-mode .modal-info-box {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #334155 !important;
+  border-color: rgba(59, 130, 246, 0.2) !important;
 }
