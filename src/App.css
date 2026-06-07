@@ -413,12 +413,25 @@ body.light-mode .secondary-btn {
 body.light-mode .secondary-btn:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.1);
 }
-body.light-mode .back-btn {
-  color: #475569;
+.modal-section-label {
+  color: #cbd5e1;
+}
+
+body.light-mode .modal-info-box p,
+body.light-mode .modal-section-label {
+  color: #475569 !important;
+}
+
+body.light-mode .profile-nickname-text,
+body.light-mode .backup-code-text {
+  color: #0f172a !important;
 }
 body.light-mode .back-btn:hover {
   background: rgba(0, 0, 0, 0.05);
   color: #0f172a;
+}
+body.light-mode .back-btn {
+  color: #475569;
 }
 body.light-mode .status-bar {
   color: #475569;

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
-import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon } from 'lucide-react'
-import { generateDailyArrows, getOrCreateDeviceId, getByteLength, getDailySeed } from './utils'
-import { collection, doc, setDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore'
+import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check } from 'lucide-react'
+import { generateDailyArrows, getOrCreateDeviceId, getByteLength, getDailySeed, generateBackupCode } from './utils'
+import { collection, doc, setDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
 import { db } from './firebase'
 import './App.css'
 
@@ -33,6 +33,7 @@ const triggerConfetti = () => {
 function App() {
   const [currentScreen, setCurrentScreen] = useState('start') // 'start', 'game', 'leaderboard'
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -42,23 +43,159 @@ function App() {
     }
   }, [isDarkMode]);
 
+  useEffect(() => {
+    const initUser = async () => {
+      const deviceId = getOrCreateDeviceId();
+      const userRef = doc(db, 'users', deviceId);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        setUserProfile({ id: deviceId, ...userSnap.data() });
+      } else {
+        const newProfile = {
+          backupCode: null,
+          nickname: localStorage.getItem('arrow_game_nickname') || '',
+          createdAt: serverTimestamp(),
+          // v.0.3.0 placeholders
+          currentStreak: 1,
+          lastPlayedDate: '',
+          achievements: []
+        };
+        await setDoc(userRef, newProfile);
+        setUserProfile({ id: deviceId, ...newProfile, isNew: true });
+      }
+    };
+    initUser();
+  }, []);
+
   const toggleTheme = () => setIsDarkMode(prev => !prev);
 
   return (
     <div className="app-container">
-      {currentScreen === 'start' && <StartScreen onPlay={() => setCurrentScreen('game')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />}
+      {currentScreen === 'start' && <StartScreen onPlay={() => setCurrentScreen('game')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} />}
       {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>
   )
 }
 
-function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme }) {
+function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile }) {
   const [showHelp, setShowHelp] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [recoverCode, setRecoverCode] = useState('');
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [isEditingNickname, setIsEditingNickname] = useState(false);
+  const [editNicknameValue, setEditNicknameValue] = useState('');
+  const [nicknameError, setNicknameError] = useState('');
+
+  const handleRecoverCodeChange = (e) => {
+    let val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (val.length > 4) {
+      val = val.slice(0, 4) + '-' + val.slice(4, 8);
+    }
+    setRecoverCode(val.slice(0, 9));
+  };
+
+  useEffect(() => {
+    if (showProfile && userProfile) {
+      if (!userProfile.nickname) {
+        setIsEditingNickname(true);
+      } else {
+        setIsEditingNickname(false);
+      }
+      setEditNicknameValue(userProfile.nickname || '');
+      setNicknameError('');
+    }
+  }, [showProfile, userProfile]);
+
+  const handleEditNicknameChange = (e) => {
+    const val = e.target.value;
+    setEditNicknameValue(val);
+    
+    const isValidChar = /^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9_. ]*$/.test(val);
+    if (getByteLength(val) > 20) {
+      setNicknameError("한글은 8글자까지, 영어는 20자까지 가능합니다");
+    } else if (!isValidChar) {
+      setNicknameError("특수문자(언더바 및 마침표 제외) 및 아이콘은 사용할 수 없습니다.");
+    } else {
+      setNicknameError('');
+    }
+  };
+
+  const handleSaveNickname = async () => {
+    const trimmed = editNicknameValue.trim();
+    if (!trimmed) {
+      setNicknameError("공백으로 설정할 수 없습니다.");
+      return;
+    }
+    const isValidChar = /^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9_. ]+$/.test(trimmed);
+    if (!isValidChar) {
+      setNicknameError("특수문자(언더바 및 마침표 제외) 및 아이콘은 사용할 수 없습니다.");
+      return;
+    }
+    if (getByteLength(trimmed) > 20) {
+      setNicknameError("한글은 8글자까지, 영어는 20자까지 가능합니다");
+      return;
+    }
+    try {
+      const deviceId = getOrCreateDeviceId();
+      await setDoc(doc(db, 'users', deviceId), { nickname: trimmed }, { merge: true });
+      localStorage.setItem('arrow_game_nickname', trimmed);
+      setUserProfile(prev => ({ ...prev, nickname: trimmed }));
+      setIsEditingNickname(false);
+      setNicknameError('');
+    } catch (e) {
+      console.error(e);
+      alert("닉네임 저장에 실패했습니다.");
+    }
+  };
+
+  const handleIssueBackupCode = async () => {
+    try {
+      const newCode = generateBackupCode();
+      const deviceId = getOrCreateDeviceId();
+      await setDoc(doc(db, 'users', deviceId), { backupCode: newCode }, { merge: true });
+      setUserProfile(prev => ({ ...prev, backupCode: newCode }));
+    } catch (e) {
+      console.error(e);
+      alert("백업 코드 발급에 실패했습니다.");
+    }
+  };
+
+  const handleRecover = async () => {
+    if (!recoverCode.trim()) return alert("백업 코드를 입력해주세요.");
+    setIsRecovering(true);
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('backupCode', '==', recoverCode.trim().toUpperCase()));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        alert("일치하는 계정을 찾을 수 없습니다. 코드를 확인해주세요.");
+      } else {
+        const matchedDoc = querySnapshot.docs[0];
+        localStorage.setItem('arrow_game_device_id', matchedDoc.id);
+        alert("계정이 성공적으로 복구되었습니다! 페이지를 새로고침합니다.");
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("복구 중 오류가 발생했습니다.");
+    } finally {
+      setIsRecovering(false);
+    }
+  };
 
   return (
     <div className="start-screen">
       <div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '1rem' }}>
+        <button 
+          className="icon-btn"
+          onClick={() => setShowProfile(true)}
+          style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+        >
+          <User size={24} />
+        </button>
         <button 
           className="icon-btn"
           onClick={toggleTheme}
@@ -95,6 +232,97 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme }) {
                   <li>실수 없이 가장 빠르게 클리어하여 랭킹에 도전해 보세요!</li>
                 </ul>
               </div>
+            </div>
+        </div>
+      )}
+
+      {showProfile && (
+        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+              <button className="close-btn" onClick={() => setShowProfile(false)}>✕</button>
+              <h2 style={{ fontSize: '1.87rem', marginBottom: '0.5rem' }}>내 프로필</h2>
+              
+              {!userProfile ? (
+                <p>로딩 중...</p>
+              ) : (
+                <>
+                  <div style={{ position: 'relative', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <p className="modal-section-label" style={{ fontSize: '0.9rem', margin: 0 }}>저장 닉네임</p>
+                      {!isEditingNickname ? (
+                        <button onClick={() => setIsEditingNickname(true)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }} title="닉네임 수정">
+                          <Pencil size={14} />
+                        </button>
+                      ) : (
+                        <button onClick={handleSaveNickname} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: 0, display: 'flex' }} title="저장">
+                          <Pencil size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '240px' }}>
+                        <input 
+                          type="text" 
+                          value={isEditingNickname ? editNicknameValue : userProfile.nickname} 
+                          onChange={handleEditNicknameChange} 
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNickname(); }}
+                          placeholder="한글 8자, 영문 20자 내외"
+                          className="nickname-input profile-nickname-text"
+                          readOnly={!isEditingNickname}
+                          style={{ 
+                            flex: 1, 
+                            minWidth: 0, 
+                            padding: '0.4rem 0.6rem', 
+                            fontSize: '0.9rem', 
+                            textAlign: 'center',
+                            outline: 'none',
+                            width: '100%',
+                            cursor: isEditingNickname ? 'text' : 'default',
+                            opacity: isEditingNickname ? 1 : 0.85
+                          }}
+                        />
+                      </div>
+                      <p style={{ position: 'absolute', bottom: '-1.3rem', color: '#ef4444', fontSize: '0.75rem', margin: 0, visibility: nicknameError ? 'visible' : 'hidden', width: '100%', textAlign: 'center' }}>
+                        {nicknameError || "안내 멘트 영역"}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="modal-info-box" style={{ textAlign: 'center', background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem' }}>
+                    <p style={{ fontSize: '0.9rem', color: '#cbd5e1', margin: '0 0 0.5rem 0' }}>나의 백업 코드</p>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', minHeight: '2.5rem' }}>
+                      {userProfile.backupCode ? (
+                        <span className="backup-code-text" style={{ fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '2px' }}>{userProfile.backupCode}</span>
+                      ) : (
+                        <button onClick={handleIssueBackupCode} className="primary-btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', borderRadius: '8px' }}>
+                          코드 발급 받기
+                        </button>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.5rem 0 0 0' }}>
+                      {userProfile.backupCode ? '이 코드를 복사하여 기기를 변경하거나 기록이 지워졌을 때 복구할 수 있습니다.' : '코드를 발급받아 내 기록을 안전하게 백업하세요.'}
+                    </p>
+                  </div>
+
+                  <div className="nickname-section" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
+                    <p className="modal-section-label" style={{ fontSize: '0.9rem', margin: '0 0 0.5rem 0' }}>계정 불러오기</p>
+                    <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                      <input 
+                        type="text" 
+                        value={recoverCode} 
+                        onChange={handleRecoverCodeChange} 
+                        placeholder="백업 코드 입력"
+                        className="nickname-input"
+                        maxLength={9}
+                        style={{ flex: 1, textTransform: 'uppercase', minWidth: '0' }}
+                      />
+                      <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: '8px' }}>
+                        복구
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
         </div>
       )}
