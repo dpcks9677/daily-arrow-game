@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy } from 'lucide-react'
-import { generateDailyArrows, getOrCreateDeviceId, getByteLength, getDailySeed, generateBackupCode } from './utils'
+import { generateDailyArrows, getByteLength, getDailySeed, generateBackupCode } from './utils'
 import { collection, doc, setDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
-import { db } from './firebase'
+import { db, auth } from './firebase'
+import { signInAnonymously } from 'firebase/auth'
 import './App.css'
 
 export const ACHIEVEMENTS = [
@@ -126,6 +127,7 @@ function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [unlockedPopups, setUnlockedPopups] = useState([]);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   useEffect(() => {
     if (currentScreen === 'start') {
@@ -143,29 +145,40 @@ function App() {
 
   useEffect(() => {
     const initUser = async () => {
-      const deviceId = getOrCreateDeviceId();
-      const userRef = doc(db, 'users', deviceId);
-      const userSnap = await getDoc(userRef);
+      try {
+        const userCredential = await signInAnonymously(auth);
+        const deviceId = userCredential.user.uid;
+        
+        const userRef = doc(db, 'users', deviceId);
+        const userSnap = await getDoc(userRef);
 
-      if (userSnap.exists()) {
-        setUserProfile({ id: deviceId, ...userSnap.data() });
-      } else {
-        // DB에 즉시 쓰지 않고, 로컬 상태로만 유지합니다. (정크 데이터 생성 방지)
-        // 유저가 닉네임을 저장하거나, 백업코드를 발급받거나, 점수를 등록할 때 { merge: true }를 통해 지연 생성(Lazy creation)됩니다.
-        const newProfile = {
-          backupCode: null,
-          nickname: localStorage.getItem('arrow_game_nickname') || '',
-          currentStreak: 1,
-          lastPlayedDate: '',
-          achievements: []
-        };
-        setUserProfile({ id: deviceId, ...newProfile, isNew: true });
+        if (userSnap.exists()) {
+          setUserProfile({ id: deviceId, ...userSnap.data() });
+        } else {
+          const newProfile = {
+            backupCode: null,
+            nickname: localStorage.getItem('arrow_game_nickname') || '',
+            currentStreak: 1,
+            lastPlayedDate: '',
+            achievements: []
+          };
+          setUserProfile({ id: deviceId, ...newProfile, isNew: true });
+        }
+      } catch (error) {
+        console.error("Anonymous auth failed:", error);
+        alert("인증에 실패했습니다. 파이어베이스 콘솔에서 익명 로그인을 활성화해주세요.");
+      } finally {
+        setIsAuthLoading(false);
       }
     };
     initUser();
   }, []);
 
   const toggleTheme = () => setIsDarkMode(prev => !prev);
+
+  if (isAuthLoading) {
+    return <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#f8fafc' }}><h3>서버 연결 중...</h3></div>;
+  }
 
   return (
     <div className="app-container">
@@ -241,7 +254,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
       return;
     }
     try {
-      const deviceId = getOrCreateDeviceId();
+      const deviceId = userProfile.id;
       await setDoc(doc(db, 'users', deviceId), { nickname: trimmed }, { merge: true });
       localStorage.setItem('arrow_game_nickname', trimmed);
       setUserProfile(prev => ({ ...prev, nickname: trimmed }));
@@ -256,7 +269,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
   const handleIssueBackupCode = async () => {
     try {
       const newCode = generateBackupCode();
-      const deviceId = getOrCreateDeviceId();
+      const deviceId = userProfile.id;
       
       // 백업 코드를 발급받는 유저는 계속 플레이할 진성 유저일 확률이 높으므로,
       // 데이터베이스 구조의 일관성을 위해 나머지 기본 요소들도 함께 생성해줍니다.
@@ -289,9 +302,15 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         alert("일치하는 계정을 찾을 수 없습니다. 코드를 확인해주세요.");
       } else {
         const matchedDoc = querySnapshot.docs[0];
-        localStorage.setItem('arrow_game_device_id', matchedDoc.id);
-        alert("계정이 성공적으로 복구되었습니다! 페이지를 새로고침합니다.");
-        window.location.reload();
+        const oldData = matchedDoc.data();
+        
+        const deviceId = userProfile.id;
+        // 현재 인증된 내 계정(deviceId) 덮어쓰기
+        await setDoc(doc(db, 'users', deviceId), oldData, { merge: true });
+        
+        setUserProfile({ id: deviceId, ...oldData });
+        alert("계정 데이터가 성공적으로 복구되었습니다!");
+        setShowProfile(false);
       }
     } catch (e) {
       console.error(e);
@@ -374,7 +393,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', background: 'rgba(0,0,0,0.8)', padding: '1rem', borderRadius: '8px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px' }}>
           <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
           <button onClick={async () => {
-             const deviceId = getOrCreateDeviceId();
+             const deviceId = userProfile.id;
              const resetData = { achievements: [], currentStreak: 1, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '' };
              await setDoc(doc(db, 'users', deviceId), resetData, { merge: true });
              setUserProfile(p => ({...p, ...resetData}));
@@ -384,7 +403,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
           
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button onClick={async () => {
-               const deviceId = getOrCreateDeviceId();
+               const deviceId = userProfile.id;
                const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
                const todayStr = kstNow.toISOString().split('T')[0];
                const timeSec = Number(debugTime); 
@@ -420,7 +439,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
           </div>
 
           <button onClick={async () => {
-             const deviceId = getOrCreateDeviceId();
+             const deviceId = userProfile.id;
              const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
              const todayStr = kstNow.toISOString().split('T')[0];
              let newStreak = (userProfile?.currentStreak || 1) + 1;
@@ -625,7 +644,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
     if (gameStatus === 'finished' && userProfile) {
       const processClearAchievements = async () => {
         try {
-          const deviceId = getOrCreateDeviceId();
+          const deviceId = userProfile.id;
           const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
           const todayStr = kstNow.toISOString().split('T')[0];
           const timeSec = Number((timeElapsed / 1000).toFixed(2));
@@ -730,7 +749,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
     if (!nickname.trim()) return alert("닉네임을 입력해주세요!");
     setIsSubmitting(true);
     try {
-      const deviceId = getOrCreateDeviceId();
+      const deviceId = userProfile.id;
       const dailySeed = getDailySeed().toString();
       localStorage.setItem('arrow_game_nickname', nickname.trim());
       

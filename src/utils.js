@@ -1,11 +1,3 @@
-export function getOrCreateDeviceId() {
-  let deviceId = localStorage.getItem('arrow_game_device_id');
-  if (!deviceId) {
-    deviceId = crypto.randomUUID();
-    localStorage.setItem('arrow_game_device_id', deviceId);
-  }
-  return deviceId;
-}
 
 export function getByteLength(str) {
   let byteLen = 0;

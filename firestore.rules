@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // users 컬렉션
+    match /users/{userId} {
+      // 누구나 읽기 가능 (백업 코드 검색 등을 위해)
+      allow read: if true;
+      // 쓰기는 자신의 토큰(auth.uid)과 대상 문서의 ID가 일치할 때만 허용
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 리더보드 점수 컬렉션 (scores_YYYY-MM-DD)
+    match /leaderboard/{dailySeed}/scores/{scoreId} {
+      allow read: if true;
+      // scoreId는 랜덤 생성되므로 문서 내 deviceId가 내 uid인지 검증
+      allow write: if request.auth != null && request.resource.data.deviceId == request.auth.uid;
+    }
+  }
+}
