@@ -1,10 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
-import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame } from 'lucide-react'
+import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy } from 'lucide-react'
 import { generateDailyArrows, getOrCreateDeviceId, getByteLength, getDailySeed, generateBackupCode } from './utils'
 import { collection, doc, setDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
 import { db } from './firebase'
 import './App.css'
+
+export const ACHIEVEMENTS = [
+  { id: 'first_clear', title: '첫 걸음', desc: '게임을 1회 완료하세요.' },
+  { id: 'leaderboard_entry', title: '입장샷', desc: '리더보드에 기록을 올리세요.' },
+  { id: 'streak_2', title: '두 번은 쉽지', desc: '2일 연속으로 게임을 완료하세요.' },
+  { id: 'streak_3', title: '작심삼일', desc: '3일 연속으로 게임을 완료하세요.' },
+  { id: 'streak_7', title: '보시기에 심히 좋았더라', desc: '일주일 연속으로 게임을 완료하세요.' },
+  { id: 'top_1', title: 'Veni, vidi, vici', desc: '리더보드에서 1등을 기록하세요. (5개 이상의 기록이 있을 때)' },
+  { id: 'speed_15s', title: '15초는 뭐...', desc: '게임을 15초 이내로 완료하세요.' },
+  { id: 'speed_12s', title: '좀 치네', desc: '게임을 12초 이내로 완료하세요.' },
+  { id: 'speed_9_8s', title: '중력가속도처럼 빠르게', desc: '게임을 9.8초 이내로 완료하세요.' },
+  { id: 'flawless', title: '무결점', desc: '한 번의 실수도 없이 게임을 완료하세요.' },
+  { id: 'play_5', title: '반복은 기본이다', desc: '하루 안에 게임을 5번 완료하세요.' },
+  { id: 'play_10', title: '열번 찍어 안 넘어가는 나무 없다', desc: '하루 안에 게임을 10번 완료하세요.' }
+];
 
 const triggerConfetti = () => {
   const commonOptions = {
@@ -98,10 +113,13 @@ function App() {
 function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile }) {
   const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
   const [recoverCode, setRecoverCode] = useState('');
   const [isRecovering, setIsRecovering] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [editNicknameValue, setEditNicknameValue] = useState('');
+  const [debugTime, setDebugTime] = useState(9.5);
+  const [debugMistakes, setDebugMistakes] = useState(0);
   const [nicknameError, setNicknameError] = useState('');
 
   const handleRecoverCodeChange = (e) => {
@@ -230,28 +248,35 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
             className="icon-btn"
+            onClick={() => setShowAchievements(true)}
+            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          >
+            <Trophy size={24} />
+          </button>
+          <button 
+            className="icon-btn"
             onClick={() => setShowProfile(true)}
-          style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-        >
-          <User size={24} />
-        </button>
-        <button 
-          className="icon-btn"
-          onClick={toggleTheme}
-          style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-        >
-          {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-        </button>
-        <button 
-          className="icon-btn"
-          onClick={() => setShowHelp(true)}
-          style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-        >
-          <HelpCircle size={24} />
+            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          >
+            <User size={24} />
+          </button>
+          <button 
+            className="icon-btn"
+            onClick={toggleTheme}
+            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          >
+            {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+          </button>
+          <button 
+            className="icon-btn"
+            onClick={() => setShowHelp(true)}
+            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          >
+            <HelpCircle size={24} />
           </button>
         </div>
       </div>
-      <h1>Daily Arrow</h1>
+      <h1 style={{ marginTop: '60px' }}>Daily Arrow</h1>
       <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요! (매일 자정 갱신)</p>
       
       <div className="button-group">
@@ -271,6 +296,121 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                   <li>매일 자정마다 화살표 세트가 바뀝니다.</li>
                   <li>실수 없이 가장 빠르게 클리어하여 랭킹에 도전해 보세요!</li>
                 </ul>
+              </div>
+            </div>
+        </div>
+      )}
+
+      {import.meta.env.DEV && (
+        <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', background: 'rgba(0,0,0,0.8)', padding: '1rem', borderRadius: '8px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px' }}>
+          <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
+          <button onClick={async () => {
+             const deviceId = getOrCreateDeviceId();
+             const resetData = { achievements: [], currentStreak: 1, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '' };
+             await setDoc(doc(db, 'users', deviceId), resetData, { merge: true });
+             setUserProfile(p => ({...p, ...resetData}));
+          }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+            모든 데이터 초기화
+          </button>
+          
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button onClick={async () => {
+               const deviceId = getOrCreateDeviceId();
+               const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+               const todayStr = kstNow.toISOString().split('T')[0];
+               const timeSec = Number(debugTime); 
+               const mistakes = Number(debugMistakes); 
+               let newTodayCount = 1;
+               if (userProfile?.todayClearDate === todayStr) {
+                 newTodayCount = (userProfile?.todayClearCount || 0) + 1;
+               }
+               const newUnlocked = [];
+               if (timeSec <= 15) newUnlocked.push('speed_15s');
+               if (timeSec <= 12) newUnlocked.push('speed_12s');
+               if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
+               if (mistakes === 0) newUnlocked.push('flawless');
+               if (newTodayCount >= 5) newUnlocked.push('play_5');
+               if (newTodayCount >= 10) newUnlocked.push('play_10');
+               newUnlocked.push('first_clear');
+
+               const currentAchievements = userProfile?.achievements || [];
+               const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
+               const updatedAchievements = [...currentAchievements, ...actualNew];
+
+               const updates = { todayClearDate: todayStr, todayClearCount: newTodayCount, achievements: updatedAchievements };
+               await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
+               setUserProfile(p => ({...p, ...updates}));
+            }} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', flex: 1, whiteSpace: 'nowrap' }}>
+              게임 완료 트리거
+            </button>
+            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', color: '#cbd5e1' }}>
+              <input type="number" step="0.1" value={debugTime} onChange={e => setDebugTime(e.target.value)} style={{ width: '40px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center' }} title="기록(초)" />초
+              <input type="number" value={debugMistakes} onChange={e => setDebugMistakes(e.target.value)} style={{ width: '30px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center', marginLeft: '0.25rem' }} title="실수 횟수" />회
+            </div>
+          </div>
+
+          <button onClick={async () => {
+             const deviceId = getOrCreateDeviceId();
+             const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+             const todayStr = kstNow.toISOString().split('T')[0];
+             let newStreak = (userProfile?.currentStreak || 1) + 1;
+             
+             const newUnlocked = ['leaderboard_entry'];
+             if (newStreak >= 2) newUnlocked.push('streak_2');
+             if (newStreak >= 3) newUnlocked.push('streak_3');
+             if (newStreak >= 7) newUnlocked.push('streak_7');
+
+             const currentAchievements = userProfile?.achievements || [];
+             const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
+             const updatedAchievements = [...currentAchievements, ...actualNew];
+
+             const updates = { currentStreak: newStreak, lastPlayedDate: todayStr, achievements: updatedAchievements };
+             await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
+             setUserProfile(p => ({...p, ...updates}));
+          }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
+            점수 등록 트리거 (스트릭 +1 강제 반영)
+          </button>
+        </div>
+      )}
+
+      {showAchievements && (
+        <div className="modal-overlay" onClick={() => setShowAchievements(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+              <button className="close-btn" onClick={() => setShowAchievements(false)}>✕</button>
+              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>도전과제</h2>
+              
+              <div className="modal-info-box" style={{ 
+                background: 'rgba(30, 58, 138, 0.3)', 
+                padding: '1.5rem', 
+                borderRadius: '12px', 
+                border: '1px solid rgba(59, 130, 246, 0.2)', 
+                marginBottom: '1.5rem',
+                height: '316px', // 아이템 높이 약 82px * 3개 + gap 16px * 2 + padding = 약 316px (3개 렌더링 시 최적)
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem'
+              }}>
+                {ACHIEVEMENTS.map(ach => {
+                  const isUnlocked = userProfile?.achievements?.includes(ach.id);
+                  const iconColor = isUnlocked ? '#f59e0b' : '#94a3b8';
+                  const bg = isUnlocked ? 'rgba(245, 158, 11, 0.2)' : 'rgba(148, 163, 184, 0.2)';
+                  const border = isUnlocked ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(148, 163, 184, 0.5)';
+                  const titleColor = isUnlocked ? '#f8fafc' : '#94a3b8';
+                  const descColor = isUnlocked ? '#94a3b8' : '#64748b';
+
+                  return (
+                    <div key={ach.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', flexShrink: 0 }}>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: bg, border: border, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                        <Trophy size={24} color={iconColor} />
+                      </div>
+                      <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1rem', color: titleColor }}>{ach.title}</p>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: descColor }}>{ach.desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
         </div>
@@ -410,6 +550,49 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile }) {
     return () => clearInterval(timerRef.current)
   }, [gameStatus, startTime])
 
+  useEffect(() => {
+    if (gameStatus === 'finished' && userProfile) {
+      const processClearAchievements = async () => {
+        try {
+          const deviceId = getOrCreateDeviceId();
+          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+          const todayStr = kstNow.toISOString().split('T')[0];
+          const timeSec = Number((timeElapsed / 1000).toFixed(2));
+          
+          let newTodayCount = 1;
+          if (userProfile.todayClearDate === todayStr) {
+            newTodayCount = (userProfile.todayClearCount || 0) + 1;
+          }
+
+          const newUnlocked = [];
+          if (timeSec <= 15) newUnlocked.push('speed_15s');
+          if (timeSec <= 12) newUnlocked.push('speed_12s');
+          if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
+          if (mistakes === 0) newUnlocked.push('flawless');
+          if (newTodayCount >= 5) newUnlocked.push('play_5');
+          if (newTodayCount >= 10) newUnlocked.push('play_10');
+          newUnlocked.push('first_clear');
+
+          const currentAchievements = userProfile.achievements || [];
+          const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
+          const updatedAchievements = [...currentAchievements, ...actualNew];
+
+          const updates = {
+            todayClearDate: todayStr,
+            todayClearCount: newTodayCount,
+            achievements: updatedAchievements
+          };
+
+          await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
+          setUserProfile(prev => ({ ...prev, ...updates }));
+        } catch (e) {
+          console.error('Error updating clear achievements:', e);
+        }
+      };
+      processClearAchievements();
+    }
+  }, [gameStatus]);
+
   const handleKeyDown = useCallback((e) => {
     if (isStunned || gameStatus === 'finished') return;
     
@@ -507,17 +690,36 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile }) {
         }
       }
 
+      const newUnlocked = ['leaderboard_entry'];
+      if (newStreak >= 2) newUnlocked.push('streak_2');
+      if (newStreak >= 3) newUnlocked.push('streak_3');
+      if (newStreak >= 7) newUnlocked.push('streak_7');
+
+      try {
+        const qList = query(scoresRef, orderBy('time', 'asc'), limit(5));
+        const snap = await getDocs(qList);
+        if (snap.size >= 5 && snap.docs[0].id === newDocRef.id) {
+          newUnlocked.push('top_1');
+        }
+      } catch(err) { console.error('Error checking top_1:', err); }
+
+      const currentAchievements = userProfile?.achievements || [];
+      const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
+      const updatedAchievements = [...currentAchievements, ...actualNew];
+
       await setDoc(doc(db, 'users', deviceId), {
         nickname: nickname.trim(),
         currentStreak: newStreak,
-        lastPlayedDate: todayStr
+        lastPlayedDate: todayStr,
+        achievements: updatedAchievements
       }, { merge: true });
 
       setUserProfile(prev => ({ 
         ...prev, 
         nickname: nickname.trim(), 
         currentStreak: newStreak, 
-        lastPlayedDate: todayStr 
+        lastPlayedDate: todayStr,
+        achievements: updatedAchievements
       }));
 
       setIsSaved(true);
