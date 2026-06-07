@@ -170,7 +170,19 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
     try {
       const newCode = generateBackupCode();
       const deviceId = getOrCreateDeviceId();
-      await setDoc(doc(db, 'users', deviceId), { backupCode: newCode }, { merge: true });
+      
+      // 백업 코드를 발급받는 유저는 계속 플레이할 진성 유저일 확률이 높으므로,
+      // 데이터베이스 구조의 일관성을 위해 나머지 기본 요소들도 함께 생성해줍니다.
+      const fullProfile = {
+        backupCode: newCode,
+        nickname: userProfile?.nickname || '',
+        currentStreak: userProfile?.currentStreak || 1,
+        lastPlayedDate: userProfile?.lastPlayedDate || '',
+        achievements: userProfile?.achievements || [],
+        createdAt: serverTimestamp() // 최초 등록 시간 기록
+      };
+
+      await setDoc(doc(db, 'users', deviceId), fullProfile, { merge: true });
       setUserProfile(prev => ({ ...prev, backupCode: newCode }));
     } catch (e) {
       console.error(e);
