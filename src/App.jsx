@@ -124,7 +124,11 @@ function AchievementPopupContainer({ popups, setPopups }) {
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('start') // 'start', 'game', 'leaderboard'
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('arrow_game_theme');
+    if (saved !== null) return saved === 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const [userProfile, setUserProfile] = useState(null);
   const [unlockedPopups, setUnlockedPopups] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -142,6 +146,19 @@ function App() {
       document.body.classList.add('light-mode');
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      if (localStorage.getItem('arrow_game_theme') === null) {
+        setIsDarkMode(e.matches);
+      }
+    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, []);
 
   useEffect(() => {
     const initUser = async () => {
@@ -189,7 +206,13 @@ function App() {
     initUser();
   }, []);
 
-  const toggleTheme = () => setIsDarkMode(prev => !prev);
+  const toggleTheme = () => {
+    setIsDarkMode(prev => {
+      const nextTheme = !prev;
+      localStorage.setItem('arrow_game_theme', nextTheme ? 'dark' : 'light');
+      return nextTheme;
+    });
+  };
 
   if (isAuthLoading) {
     return <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#f8fafc' }}><h3>서버 연결 중...</h3></div>;
