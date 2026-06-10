@@ -328,7 +328,19 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
 
   const handleIssueBackupCode = async () => {
     try {
-      const newCode = generateBackupCode();
+      let newCode;
+      let isUnique = false;
+      const usersRef = collection(db, 'users');
+      
+      while (!isUnique) {
+        newCode = generateBackupCode();
+        const q = query(usersRef, where('backupCode', '==', newCode));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+          isUnique = true;
+        }
+      }
+
       const deviceId = userProfile.id;
       const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
       const issuedDateStr = kstNow.toISOString().split('T')[0];
