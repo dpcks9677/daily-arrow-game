@@ -336,6 +336,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
       // 백업 코드를 발급받는 유저는 계속 플레이할 진성 유저일 확률이 높으므로,
       // 데이터베이스 구조의 일관성을 위해 나머지 기본 요소들도 함께 생성해줍니다.
       const fullProfile = {
+        id: deviceId,
         backupCode: newCode,
         backupCodeIssuedAt: issuedDateStr,
         nickname: userProfile?.nickname || '',
