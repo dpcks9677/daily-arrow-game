@@ -512,3 +512,40 @@ body.light-mode .modal-info-box {
   color: #334155 !important;
   border-color: rgba(59, 130, 246, 0.2) !important;
 }
+.custom-tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.custom-tooltip {
+  visibility: hidden;
+  background-color: rgba(30, 58, 138, 0.95);
+  color: #f8fafc;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  position: absolute;
+  z-index: 100;
+  top: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  pointer-events: none;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.custom-tooltip-wrapper:hover .custom-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+.light-mode .custom-tooltip {
+  background-color: rgba(255, 255, 255, 0.95);
+  color: #1e293b;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}

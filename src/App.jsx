@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
-import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy, BarChart } from 'lucide-react'
+import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy, BarChart, AlertCircle } from 'lucide-react'
 import { generateDailyArrows, getByteLength, getDailySeed, generateBackupCode } from './utils'
 import { collection, doc, setDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from './firebase'
@@ -377,41 +377,124 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button 
-            className="icon-btn"
-            onClick={() => setShowAchievements(true)}
-            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-          >
-            <Trophy size={24} />
-          </button>
-          <button 
-            className="icon-btn"
-            onClick={() => setShowStatistics(true)}
-            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-          >
-            <BarChart size={24} />
-          </button>
-          <button 
-            className="icon-btn"
-            onClick={() => setShowProfile(true)}
-            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-          >
-            <User size={24} />
-          </button>
-          <button 
-            className="icon-btn"
-            onClick={toggleTheme}
-            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-          >
-            {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-          </button>
-          <button 
-            className="icon-btn"
-            onClick={() => setShowHelp(true)}
-            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-          >
-            <HelpCircle size={24} />
-          </button>
+          {!userProfile?.backupCode ? (
+            <div className="custom-tooltip-wrapper">
+              <button 
+                className="icon-btn"
+                style={{ 
+                  width: '40px', height: '40px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  color: '#475569', 
+                  cursor: 'default', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  opacity: 0.4
+                }}
+              >
+                <Trophy size={24} />
+              </button>
+              <span className="custom-tooltip">프로필을 생성하고 도전과제 시스템을 활성화 하세요.</span>
+            </div>
+          ) : (
+            <div className="custom-tooltip-wrapper">
+              <button 
+                className="icon-btn"
+                onClick={() => setShowAchievements(true)}
+                style={{ 
+                  width: '40px', height: '40px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  color: '#cbd5e1', 
+                  cursor: 'pointer', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  opacity: 1
+                }}
+              >
+                <Trophy size={24} />
+              </button>
+              <span className="custom-tooltip">도전과제</span>
+            </div>
+          )}
+
+          {!userProfile?.backupCode ? (
+            <div className="custom-tooltip-wrapper">
+              <button 
+                className="icon-btn"
+                style={{ 
+                  width: '40px', height: '40px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  color: '#475569', 
+                  cursor: 'default', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  opacity: 0.4
+                }}
+              >
+                <BarChart size={24} />
+              </button>
+              <span className="custom-tooltip">프로필을 생성하고 통계 시스템을 활성화 하세요.</span>
+            </div>
+          ) : (
+            <div className="custom-tooltip-wrapper">
+              <button 
+                className="icon-btn"
+                onClick={() => setShowStatistics(true)}
+                style={{ 
+                  width: '40px', height: '40px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  color: '#cbd5e1', 
+                  cursor: 'pointer', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  opacity: 1
+                }}
+              >
+                <BarChart size={24} />
+              </button>
+              <span className="custom-tooltip">통계</span>
+            </div>
+          )}
+          <div className="custom-tooltip-wrapper">
+            <button 
+              className="icon-btn"
+              onClick={() => setShowProfile(true)}
+              style={{ position: 'relative', width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <User size={24} />
+              {(!userProfile?.backupCode && userProfile) && (
+                <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#1e293b', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px' }}>
+                  <AlertCircle size={16} color="#fbbf24" fill="#1e293b" />
+                </div>
+              )}
+            </button>
+            <span className="custom-tooltip">내 프로필</span>
+          </div>
+          
+          <div className="custom-tooltip-wrapper">
+            <button 
+              className="icon-btn"
+              onClick={toggleTheme}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+            </button>
+            <span className="custom-tooltip">{isDarkMode ? '라이트 테마' : '다크 테마'}</span>
+          </div>
+          
+          <div className="custom-tooltip-wrapper">
+            <button 
+              className="icon-btn"
+              onClick={() => setShowHelp(true)}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <HelpCircle size={24} />
+            </button>
+            <span className="custom-tooltip">게임 도움말</span>
+          </div>
         </div>
       </div>
       <h1 style={{ marginTop: '60px' }}>Daily Arrow</h1>
@@ -697,7 +780,9 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                       )}
                     </div>
                     <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.5rem 0 0 0' }}>
-                      {userProfile.backupCode ? '이 코드를 복사하여 기기를 변경하거나 기록이 지워졌을 때 복구할 수 있습니다.' : '코드를 발급받아 내 기록을 안전하게 백업하세요.'}
+                      {userProfile.backupCode ? '이 코드를 복사하여 기기를 변경하거나 기록이 지워졌을 때 복구할 수 있습니다.' : (
+                        <>코드를 발급받아 내 기록을 안전하게 백업하고<br/>통계 및 도전과제 시스템을 이용해보세요.</>
+                      )}
                     </p>
                   </div>
 
