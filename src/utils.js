@@ -1,3 +1,4 @@
+import CryptoJS from 'crypto-js';
 
 export function getByteLength(str) {
   let byteLen = 0;
@@ -53,4 +54,51 @@ export function generateBackupCode() {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result.slice(0, 4) + '-' + result.slice(4);
+}
+
+const SECRET_KEY = import.meta.env.VITE_APP_SECRET || 'daily_arrow_secure_key_2026_!@#';
+
+export function saveSecureProfile(profile) {
+    try {
+        const jsonStr = JSON.stringify(profile);
+        const hash = CryptoJS.HmacSHA256(jsonStr, SECRET_KEY).toString();
+        const ciphertext = CryptoJS.AES.encrypt(jsonStr, SECRET_KEY).toString();
+        
+        const payload = {
+            data: ciphertext,
+            hash: hash
+        };
+        localStorage.setItem('arrow_game_profile', JSON.stringify(payload));
+    } catch (e) {
+        console.error("Failed to secure profile:", e);
+    }
+}
+
+export function loadSecureProfile() {
+    try {
+        const payloadStr = localStorage.getItem('arrow_game_profile');
+        if (!payloadStr) return null;
+
+        const payload = JSON.parse(payloadStr);
+        if (!payload || !payload.data || !payload.hash) return null;
+
+        const bytes = CryptoJS.AES.decrypt(payload.data, SECRET_KEY);
+        const decryptedStr = bytes.toString(CryptoJS.enc.Utf8);
+        
+        if (!decryptedStr) return null;
+
+        const calculatedHash = CryptoJS.HmacSHA256(decryptedStr, SECRET_KEY).toString();
+        
+        if (calculatedHash === payload.hash) {
+            return JSON.parse(decryptedStr);
+        } else {
+            console.error("Profile integrity check failed! Data tampered.");
+            localStorage.removeItem('arrow_game_profile');
+            return null;
+        }
+    } catch (e) {
+        console.error("Failed to load secure profile:", e);
+        localStorage.removeItem('arrow_game_profile');
+        return null;
+    }
 }
