@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy, BarChart, AlertCircle } from 'lucide-react'
-import { generateDailyArrows, getByteLength, getDailySeed, generateBackupCode } from './utils'
+import { generateDailyArrows, getByteLength, getDailySeed, generateBackupCode, saveSecureProfile, loadSecureProfile } from './utils'
 import { collection, doc, setDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from './firebase'
 import { signInAnonymously } from 'firebase/auth'
@@ -169,12 +169,7 @@ function App() {
         const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
         const todayStr = kstNow.toISOString().split('T')[0];
 
-        const localDataStr = localStorage.getItem('arrow_game_profile');
-        let localData = null;
-        if (localDataStr) {
-          try { localData = JSON.parse(localDataStr); } catch(e) {}
-        }
-
+        const localData = loadSecureProfile();
         const userRef = doc(db, 'users', deviceId);
 
         if (localData && localData.backupCode) {
@@ -183,7 +178,7 @@ function App() {
             const data = userSnap.data();
             const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 1, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
             setUserProfile(merged);
-            localStorage.setItem('arrow_game_profile', JSON.stringify(merged));
+            saveSecureProfile(merged);
           } else {
             setUserProfile({ id: deviceId, ...localData });
           }
@@ -195,7 +190,7 @@ function App() {
             const data = userSnap.data();
             const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 1, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
             setUserProfile(merged);
-            localStorage.setItem('arrow_game_profile', JSON.stringify(merged));
+            saveSecureProfile(merged);
           } else {
             const newProfile = {
               id: deviceId,
@@ -210,7 +205,7 @@ function App() {
               bestRecords: []
             };
             setUserProfile({ ...newProfile, isNew: true });
-            localStorage.setItem('arrow_game_profile', JSON.stringify({ ...newProfile, isNew: true }));
+            saveSecureProfile({ ...newProfile, isNew: true });
           }
         }
       } catch (error) {
@@ -227,7 +222,7 @@ function App() {
   const saveProfile = async (currentProfile, updates) => {
     const newProfile = { ...currentProfile, ...updates };
     setUserProfile(newProfile);
-    localStorage.setItem('arrow_game_profile', JSON.stringify(newProfile));
+    saveSecureProfile(newProfile);
     if (newProfile.backupCode) {
       setDoc(doc(db, 'users', newProfile.id), updates, { merge: true }).catch(e => console.error("DB Sync error:", e));
     }
@@ -356,7 +351,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
 
       await setDoc(doc(db, 'users', deviceId), fullProfile, { merge: true });
       setUserProfile(fullProfile);
-      localStorage.setItem('arrow_game_profile', JSON.stringify(fullProfile));
+      saveSecureProfile(fullProfile);
     } catch (e) {
       console.error(e);
       alert("백업 코드 발급에 실패했습니다.");
@@ -383,7 +378,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         
         const newProfile = { id: deviceId, ...oldData };
         setUserProfile(newProfile);
-        localStorage.setItem('arrow_game_profile', JSON.stringify(newProfile));
+        saveSecureProfile(newProfile);
         alert("계정 데이터가 성공적으로 복구되었습니다!");
         setShowProfile(false);
       }
