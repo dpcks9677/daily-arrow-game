@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
-import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy } from 'lucide-react'
+import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy, BarChart } from 'lucide-react'
 import { generateDailyArrows, getByteLength, getDailySeed, generateBackupCode } from './utils'
 import { collection, doc, setDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from './firebase'
@@ -234,6 +234,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
   const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
   const [recoverCode, setRecoverCode] = useState('');
   const [isRecovering, setIsRecovering] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
@@ -382,6 +383,13 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
             style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
           >
             <Trophy size={24} />
+          </button>
+          <button 
+            className="icon-btn"
+            onClick={() => setShowStatistics(true)}
+            style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          >
+            <BarChart size={24} />
           </button>
           <button 
             className="icon-btn"
@@ -561,6 +569,66 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                   );
                 })}
               </div>
+            </div>
+        </div>
+      )}
+
+      {showStatistics && (
+        <div className="modal-overlay" onClick={() => setShowStatistics(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+              <button className="close-btn" onClick={() => setShowStatistics(false)}>✕</button>
+              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>통계</h2>
+              
+              {!userProfile ? (
+                <p>로딩 중...</p>
+              ) : (
+                <>
+                  <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.totalPlayCount || 0}</span>
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                          <Flame size={20} color={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
+                          <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.longestStreak || userProfile.currentStreak || 0}</span>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginTop: '0.3rem' }}>{userProfile.gameStartDate ? userProfile.gameStartDate.substring(2).replace(/-/g, '.') : 'N/A'}</span>
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>가입일</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
+                    {(!userProfile.bestRecords || userProfile.bestRecords.length === 0) ? (
+                      <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '1rem 0' }}>아직 등록된 기록이 없습니다.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        {userProfile.bestRecords.map((record, idx) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                              <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}초</span>
+                                <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
+                                  {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
+                                </span>
+                              </div>
+                            </div>
+                            <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record.date}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
         </div>
       )}
