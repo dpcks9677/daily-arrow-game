@@ -549,3 +549,35 @@ body.light-mode .modal-info-box {
   border: 1px solid rgba(148, 163, 184, 0.5);
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
+
+body.light-mode .modal-info-box h3,
+body.light-mode .modal-info-box .stat-highlight {
+  color: #0f172a !important;
+}
+body.light-mode .modal-info-box .stat-label,
+body.light-mode .modal-info-box .stat-date {
+  color: #475569 !important;
+}
+body.light-mode .modal-info-box .stat-number {
+  color: #ff7300 !important;
+}
+body.light-mode .modal-info-box .stat-empty {
+  color: #475569 !important;
+}
+
+body.light-mode .inner-box {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+body.light-mode .ach-title {
+  color: #0f172a !important;
+}
+body.light-mode .ach-desc {
+  color: #475569 !important;
+}
+
+body.light-mode .nickname-section {
+  border-top: 1px solid rgba(0, 0, 0, 0.15) !important;
+}

@@ -309,24 +309,27 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
     try {
       const newCode = generateBackupCode();
       const deviceId = userProfile.id;
+      const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+      const issuedDateStr = kstNow.toISOString().split('T')[0];
       
       // 백업 코드를 발급받는 유저는 계속 플레이할 진성 유저일 확률이 높으므로,
       // 데이터베이스 구조의 일관성을 위해 나머지 기본 요소들도 함께 생성해줍니다.
       const fullProfile = {
         backupCode: newCode,
+        backupCodeIssuedAt: issuedDateStr,
         nickname: userProfile?.nickname || '',
         currentStreak: userProfile?.currentStreak || 1,
         lastPlayedDate: userProfile?.lastPlayedDate || '',
         achievements: userProfile?.achievements || [],
         totalPlayCount: userProfile?.totalPlayCount || 0,
         longestStreak: userProfile?.longestStreak || userProfile?.currentStreak || 1,
-        gameStartDate: userProfile?.gameStartDate || new Date(new Date().getTime() + 9 * 60 * 60 * 1000).toISOString().split('T')[0],
+        gameStartDate: userProfile?.gameStartDate || issuedDateStr,
         bestRecords: userProfile?.bestRecords || [],
         createdAt: serverTimestamp() // 최초 등록 시간 기록
       };
 
       await setDoc(doc(db, 'users', deviceId), fullProfile, { merge: true });
-      setUserProfile(prev => ({ ...prev, backupCode: newCode }));
+      setUserProfile(prev => ({ ...prev, backupCode: newCode, backupCodeIssuedAt: issuedDateStr }));
     } catch (e) {
       console.error(e);
       alert("백업 코드 발급에 실패했습니다.");
@@ -640,13 +643,13 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                   const descColor = isUnlocked ? '#94a3b8' : '#64748b';
 
                   return (
-                    <div key={ach.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', flexShrink: 0 }}>
+                    <div key={ach.id} className="inner-box" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', flexShrink: 0 }}>
                       <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: bg, border: border, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
                         <Trophy size={24} color={iconColor} />
                       </div>
                       <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                        <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1rem', color: titleColor }}>{ach.title}</p>
-                        <p style={{ margin: 0, fontSize: '0.8rem', color: descColor }}>{ach.desc}</p>
+                        <p className="ach-title" style={{ margin: 0, fontWeight: 'bold', fontSize: '1rem', color: titleColor }}>{ach.title}</p>
+                        <p className="ach-desc" style={{ margin: 0, fontSize: '0.8rem', color: descColor }}>{ach.desc}</p>
                       </div>
                     </div>
                   );
@@ -670,19 +673,19 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                     <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.totalPlayCount || 0}</span>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
+                        <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.totalPlayCount || 0}</span>
+                        <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
                           <Flame size={20} color={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
-                          <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.longestStreak || userProfile.currentStreak || 0}</span>
+                          <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.longestStreak || userProfile.currentStreak || 0}</span>
                         </div>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
+                        <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginTop: '0.3rem' }}>{userProfile.gameStartDate ? userProfile.gameStartDate.substring(2).replace(/-/g, '.') : 'N/A'}</span>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>가입일</span>
+                        <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginTop: '0.3rem' }}>{(userProfile.backupCodeIssuedAt || userProfile.gameStartDate) ? (userProfile.backupCodeIssuedAt || userProfile.gameStartDate).substring(2).replace(/-/g, '.') : 'N/A'}</span>
+                        <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>가입일</span>
                       </div>
                     </div>
                   </div>
@@ -690,21 +693,21 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                   <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
                     {(!userProfile.bestRecords || userProfile.bestRecords.length === 0) ? (
-                      <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '1rem 0' }}>아직 등록된 기록이 없습니다.</p>
+                      <p className="stat-empty" style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '1rem 0' }}>아직 등록된 기록이 없습니다.</p>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                         {userProfile.bestRecords.map((record, idx) => (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                          <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                               <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}초</span>
+                                <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}초</span>
                                 <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
                                   {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
                                 </span>
                               </div>
                             </div>
-                            <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record.date}</span>
+                            <span className="stat-date" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record.date}</span>
                           </div>
                         ))}
                       </div>
