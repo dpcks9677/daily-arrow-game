@@ -166,35 +166,52 @@ function App() {
         const userCredential = await signInAnonymously(auth);
         const deviceId = userCredential.user.uid;
         
-        const userRef = doc(db, 'users', deviceId);
-        const userSnap = await getDoc(userRef);
-
         const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
         const todayStr = kstNow.toISOString().split('T')[0];
 
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          setUserProfile({ 
-            id: deviceId, 
-            totalPlayCount: data.totalPlayCount || 0,
-            longestStreak: data.longestStreak || data.currentStreak || 1,
-            gameStartDate: data.gameStartDate || todayStr,
-            bestRecords: data.bestRecords || [],
-            ...data 
-          });
+        const localDataStr = localStorage.getItem('arrow_game_profile');
+        let localData = null;
+        if (localDataStr) {
+          try { localData = JSON.parse(localDataStr); } catch(e) {}
+        }
+
+        const userRef = doc(db, 'users', deviceId);
+
+        if (localData && localData.backupCode) {
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 1, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
+            setUserProfile(merged);
+            localStorage.setItem('arrow_game_profile', JSON.stringify(merged));
+          } else {
+            setUserProfile({ id: deviceId, ...localData });
+          }
+        } else if (localData) {
+          setUserProfile({ id: deviceId, ...localData });
         } else {
-          const newProfile = {
-            backupCode: null,
-            nickname: localStorage.getItem('arrow_game_nickname') || '',
-            currentStreak: 1,
-            lastPlayedDate: '',
-            achievements: [],
-            totalPlayCount: 0,
-            longestStreak: 1,
-            gameStartDate: todayStr,
-            bestRecords: []
-          };
-          setUserProfile({ id: deviceId, ...newProfile, isNew: true });
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 1, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
+            setUserProfile(merged);
+            localStorage.setItem('arrow_game_profile', JSON.stringify(merged));
+          } else {
+            const newProfile = {
+              id: deviceId,
+              backupCode: null,
+              nickname: localStorage.getItem('arrow_game_nickname') || '',
+              currentStreak: 1,
+              lastPlayedDate: '',
+              achievements: [],
+              totalPlayCount: 0,
+              longestStreak: 1,
+              gameStartDate: todayStr,
+              bestRecords: []
+            };
+            setUserProfile({ ...newProfile, isNew: true });
+            localStorage.setItem('arrow_game_profile', JSON.stringify({ ...newProfile, isNew: true }));
+          }
         }
       } catch (error) {
         console.error("Anonymous auth failed:", error);
@@ -205,6 +222,16 @@ function App() {
     };
     initUser();
   }, []);
+
+
+  const saveProfile = async (currentProfile, updates) => {
+    const newProfile = { ...currentProfile, ...updates };
+    setUserProfile(newProfile);
+    localStorage.setItem('arrow_game_profile', JSON.stringify(newProfile));
+    if (newProfile.backupCode) {
+      setDoc(doc(db, 'users', newProfile.id), updates, { merge: true }).catch(e => console.error("DB Sync error:", e));
+    }
+  };
 
   const toggleTheme = () => {
     setIsDarkMode(prev => {
@@ -223,14 +250,14 @@ function App() {
       {unlockedPopups.length > 0 && (
         <AchievementPopupContainer popups={unlockedPopups} setPopups={setUnlockedPopups} />
       )}
-      {currentScreen === 'start' && <StartScreen onPlay={() => setCurrentScreen('game')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} setUnlockedPopups={setUnlockedPopups} />}
-      {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {currentScreen === 'start' && <StartScreen onPlay={() => setCurrentScreen('game')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>
   )
 }
 
-function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, setUnlockedPopups }) {
+function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
   const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
@@ -294,9 +321,8 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
     }
     try {
       const deviceId = userProfile.id;
-      await setDoc(doc(db, 'users', deviceId), { nickname: trimmed }, { merge: true });
+      await saveProfile(userProfile, { nickname: trimmed });
       localStorage.setItem('arrow_game_nickname', trimmed);
-      setUserProfile(prev => ({ ...prev, nickname: trimmed }));
       setIsEditingNickname(false);
       setNicknameError('');
     } catch (e) {
@@ -329,7 +355,8 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
       };
 
       await setDoc(doc(db, 'users', deviceId), fullProfile, { merge: true });
-      setUserProfile(prev => ({ ...prev, backupCode: newCode, backupCodeIssuedAt: issuedDateStr }));
+      setUserProfile(fullProfile);
+      localStorage.setItem('arrow_game_profile', JSON.stringify(fullProfile));
     } catch (e) {
       console.error(e);
       alert("백업 코드 발급에 실패했습니다.");
@@ -354,7 +381,9 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         // 현재 인증된 내 계정(deviceId) 덮어쓰기
         await setDoc(doc(db, 'users', deviceId), oldData, { merge: true });
         
-        setUserProfile({ id: deviceId, ...oldData });
+        const newProfile = { id: deviceId, ...oldData };
+        setUserProfile(newProfile);
+        localStorage.setItem('arrow_game_profile', JSON.stringify(newProfile));
         alert("계정 데이터가 성공적으로 복구되었습니다!");
         setShowProfile(false);
       }
@@ -531,8 +560,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
           <button onClick={async () => {
              const deviceId = userProfile.id;
              const resetData = { achievements: [], currentStreak: 1, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 1, bestRecords: [] };
-             await setDoc(doc(db, 'users', deviceId), resetData, { merge: true });
-             setUserProfile(p => ({...p, ...resetData}));
+             await saveProfile(userProfile, resetData);
           }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
             모든 데이터 초기화
           </button>
@@ -568,8 +596,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                  achievements: updatedAchievements,
                  totalPlayCount: newTotalPlayCount
                };
-               await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
-               setUserProfile(p => ({...p, ...updates}));
+               await saveProfile(userProfile, updates);
                if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
             }} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', flex: 1, whiteSpace: 'nowrap' }}>
               게임 완료 트리거
@@ -607,8 +634,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                }).slice(0, 3);
 
              const updates = { currentStreak: newStreak, lastPlayedDate: todayStr, achievements: updatedAchievements, longestStreak: newLongestStreak, bestRecords: newBestRecords };
-             await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
-             setUserProfile(p => ({...p, ...updates}));
+             await saveProfile(userProfile, updates);
              if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
           }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
             점수 등록 트리거 (스트릭 +1 강제 반영)
@@ -815,7 +841,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
   )
 }
 
-function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnlockedPopups }) {
+function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
   const [arrows, setArrows] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [gameStatus, setGameStatus] = useState('waiting') // 'waiting', 'playing', 'finished'
@@ -890,8 +916,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
             totalPlayCount: newTotalPlayCount
           };
 
-          await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
-          setUserProfile(prev => ({ ...prev, ...updates }));
+          await saveProfile(userProfile, updates);
           if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
         } catch (e) {
           console.error('Error updating clear achievements:', e);
@@ -977,6 +1002,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
         nickname: nickname.trim(),
         time: Number((timeElapsed / 1000).toFixed(2)),
         mistakes: mistakes,
+        hasBackupCode: !!userProfile.backupCode,
         timestamp: serverTimestamp()
       });
 
@@ -1035,12 +1061,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, setUnl
         bestRecords: newBestRecords
       };
 
-      await setDoc(doc(db, 'users', deviceId), updates, { merge: true });
-
-      setUserProfile(prev => ({ 
-        ...prev, 
-        ...updates
-      }));
+      await saveProfile(userProfile, updates);
       if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
 
       setIsSaved(true);
