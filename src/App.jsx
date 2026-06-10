@@ -581,7 +581,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                newUnlocked.push('first_clear');
 
                const currentAchievements = userProfile?.achievements || [];
-               const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
+               const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
                const updatedAchievements = [...currentAchievements, ...actualNew];
 
                const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
@@ -614,7 +614,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
              if (newStreak >= 7) newUnlocked.push('streak_7');
 
              const currentAchievements = userProfile?.achievements || [];
-             const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
+             const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
              const updatedAchievements = [...currentAchievements, ...actualNew];
 
              const newLongestStreak = Math.max(userProfile?.longestStreak || 1, newStreak);
@@ -900,7 +900,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
           newUnlocked.push('first_clear');
 
           const currentAchievements = userProfile.achievements || [];
-          const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
+          const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
           const updatedAchievements = [...currentAchievements, ...actualNew];
 
           const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
@@ -1033,7 +1033,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
       } catch(err) { console.error('Error checking top_1:', err); }
 
       const currentAchievements = userProfile?.achievements || [];
-      const actualNew = newUnlocked.filter(id => !currentAchievements.includes(id));
+      const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
       const updatedAchievements = [...currentAchievements, ...actualNew];
 
       const newLongestStreak = Math.max(userProfile?.longestStreak || 1, newStreak);
