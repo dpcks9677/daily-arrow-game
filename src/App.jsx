@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy, BarChart, AlertCircle } from 'lucide-react'
 import { generateDailyArrows, getByteLength, getDailySeed, generateBackupCode, saveSecureProfile, loadSecureProfile } from './utils'
-import { collection, doc, setDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
+import { collection, doc, setDoc, updateDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from './firebase'
 import { signInAnonymously } from 'firebase/auth'
 import './App.css'
@@ -260,6 +260,8 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
   const [showProfile, setShowProfile] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
+  const [statsPage, setStatsPage] = useState(0);
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
   const [recoverCode, setRecoverCode] = useState('');
   const [isRecovering, setIsRecovering] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
@@ -543,7 +545,9 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
           </div>
         </div>
       </div>
-      <h1 style={{ marginTop: '60px' }}>Daily Arrow</h1>
+      <h1 style={{ marginTop: '60px' }}>
+        Daily Arrow
+      </h1>
       <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요! (매일 자정 갱신)</p>
       
       <div className="button-group">
@@ -568,93 +572,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         </div>
       )}
 
-      {import.meta.env.DEV && (
-        <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', background: 'rgba(0,0,0,0.8)', padding: '1rem', borderRadius: '8px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px' }}>
-          <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
-          <button onClick={async () => {
-             const deviceId = userProfile.id;
-             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalPlayTime: 0, totalMistakes: 0, perfectClearCount: 0 };
-             await saveProfile(userProfile, resetData);
-          }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
-            모든 데이터 초기화
-          </button>
-          
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <button onClick={async () => {
-               const deviceId = userProfile.id;
-               const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-               const todayStr = kstNow.toISOString().split('T')[0];
-               const timeSec = Number(debugTime); 
-               const mistakes = Number(debugMistakes); 
-               let newTodayCount = 1;
-               if (userProfile?.todayClearDate === todayStr) {
-                 newTodayCount = (userProfile?.todayClearCount || 0) + 1;
-               }
-               const newUnlocked = [];
-               if (timeSec <= 15) newUnlocked.push('speed_15s');
-               if (timeSec <= 12) newUnlocked.push('speed_12s');
-               if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
-               if (mistakes === 0) newUnlocked.push('flawless');
-               if (newTodayCount >= 5) newUnlocked.push('play_5');
-               if (newTodayCount >= 10) newUnlocked.push('play_10');
-               newUnlocked.push('first_clear');
 
-               const currentAchievements = userProfile?.achievements || [];
-               const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
-               const updatedAchievements = [...currentAchievements, ...actualNew];
-
-               const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
-               const updates = { 
-                 todayClearDate: todayStr, 
-                 todayClearCount: newTodayCount, 
-                 achievements: updatedAchievements,
-                 totalPlayCount: newTotalPlayCount
-               };
-               await saveProfile(userProfile, updates);
-               if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
-            }} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', flex: 1, whiteSpace: 'nowrap' }}>
-              게임 완료 트리거
-            </button>
-            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', color: '#cbd5e1' }}>
-              <input type="number" step="0.1" value={debugTime} onChange={e => setDebugTime(e.target.value)} style={{ width: '40px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center' }} title="기록(초)" />초
-              <input type="number" value={debugMistakes} onChange={e => setDebugMistakes(e.target.value)} style={{ width: '30px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center', marginLeft: '0.25rem' }} title="실수 횟수" />회
-            </div>
-          </div>
-
-          <button onClick={async () => {
-             const deviceId = userProfile.id;
-             const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-             const todayStr = kstNow.toISOString().split('T')[0];
-             let newStreak = (userProfile?.currentStreak || 0) + 1;
-             
-             const newUnlocked = ['leaderboard_entry'];
-             if (newStreak >= 2) newUnlocked.push('streak_2');
-             if (newStreak >= 3) newUnlocked.push('streak_3');
-             if (newStreak >= 7) newUnlocked.push('streak_7');
-
-             const currentAchievements = userProfile?.achievements || [];
-             const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
-             const updatedAchievements = [...currentAchievements, ...actualNew];
-
-             const newLongestStreak = Math.max(userProfile?.longestStreak || 0, newStreak);
-
-             const timeSec = Number(debugTime) || 10;
-             const mistakes = Number(debugMistakes) || 0;
-             const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
-             const newBestRecords = [...(userProfile?.bestRecords || []), currentRecord]
-               .sort((a, b) => {
-                 if (a.time !== b.time) return a.time - b.time;
-                 return a.mistakes - b.mistakes;
-               }).slice(0, 3);
-
-             const updates = { currentStreak: newStreak, lastPlayedDate: todayStr, achievements: updatedAchievements, longestStreak: newLongestStreak, bestRecords: newBestRecords };
-             await saveProfile(userProfile, updates);
-             if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
-          }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
-            점수 등록 트리거 (스트릭 +1 강제 반영)
-          </button>
-        </div>
-      )}
 
       {showAchievements && (
         <div className="modal-overlay" onClick={() => setShowAchievements(false)}>
@@ -701,58 +619,233 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
 
       {showStatistics && (
         <div className="modal-overlay" onClick={() => setShowStatistics(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '510px', width: '95%', position: 'relative' }}>
               <button className="close-btn" onClick={() => setShowStatistics(false)}>✕</button>
-              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>통계</h2>
+
+              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>{statsPage === 0 ? '통계' : '날짜 별 기록'}</h2>
+
+              {/* Pagination Arrows */}
+              {statsPage > 0 && (
+                <button onClick={() => setStatsPage(p => p - 1)} style={{ position: 'absolute', left: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                  <LucideLeft size={24} />
+                </button>
+              )}
+              {statsPage < 1 && (
+                <button onClick={() => setStatsPage(p => p + 1)} style={{ position: 'absolute', right: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                  <LucideRight size={24} />
+                </button>
+              )}
               
               {!userProfile ? (
                 <p>로딩 중...</p>
               ) : (
                 <>
-                  <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                        <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.totalPlayCount || 0}</span>
-                        <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
-                          <Flame size={20} color={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
-                          <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{userProfile.longestStreak || userProfile.currentStreak || 0}</span>
+                  {statsPage === 0 ? (
+                    <div style={{ width: '90%', margin: '0 auto', height: '675px' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.totalPlayCount || 0}</span>
+                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                              <Flame size={20} color={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{userProfile.longestStreak || userProfile.currentStreak || 0}</span>
+                            </div>
+                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginTop: '0.3rem' }}>{(userProfile.backupCodeIssuedAt || userProfile.gameStartDate) ? (userProfile.backupCodeIssuedAt || userProfile.gameStartDate).substring(2).replace(/-/g, '.') : 'N/A'}</span>
+                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>가입일</span>
+                          </div>
                         </div>
-                        <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                        <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginTop: '0.3rem' }}>{(userProfile.backupCodeIssuedAt || userProfile.gameStartDate) ? (userProfile.backupCodeIssuedAt || userProfile.gameStartDate).substring(2).replace(/-/g, '.') : 'N/A'}</span>
-                        <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>가입일</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
-                    {(!userProfile.bestRecords || userProfile.bestRecords.length === 0) ? (
-                      <p className="stat-empty" style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '1rem 0' }}>아직 등록된 기록이 없습니다.</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                        {userProfile.bestRecords.map((record, idx) => (
-                          <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                              <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
-                                <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
-                                  {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
-                                </span>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>오늘의 기록</h3>
+                        {(() => {
+                          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                          const todayStr = kstNow.toISOString().split('T')[0];
+                          const dailyRecs = userProfile.dailyRecords || {};
+                          const todayDaily = dailyRecs[todayStr] || { playCount: 0, totalMistakes: 0, totalTime: 0 };
+                          
+                          const avgMistakes = todayDaily.playCount > 0 ? (todayDaily.totalMistakes / todayDaily.playCount).toFixed(1) : 0;
+                          const totalTimeSec = todayDaily.totalTime || 0;
+                          const mins = Math.floor(totalTimeSec / 60);
+                          const secs = Math.floor(totalTimeSec % 60);
+                          const timeStr = mins > 0 ? `${mins}분 ${secs}초` : `${secs}초`;
+
+                          return (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{todayDaily.playCount}</span>
+                                <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{avgMistakes}</span>
+                                <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>틀린 횟수 평균</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#3b82f6', marginTop: '0.3rem' }}>{todayDaily.playCount > 0 ? timeStr : '-'}</span>
+                                <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>플레이타임</span>
                               </div>
                             </div>
-                            <span className="stat-date" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record.date}</span>
-                          </div>
-                        ))}
+                          );
+                        })()}
                       </div>
-                    )}
-                  </div>
+
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '280px' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
+                        {(!userProfile.bestRecords || userProfile.bestRecords.length === 0) ? (
+                          <p className="stat-empty" style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '1rem 0' }}>아직 등록된 기록이 없습니다.</p>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            {userProfile.bestRecords.map((record, idx) => (
+                              <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                  <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                    <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
+                                    <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
+                                      {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="stat-date" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record.date}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', height: '675px' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '420px' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>최근 7일 기록</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                          {(() => {
+                            const dailyRecs = userProfile.dailyRecords || {};
+                            const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                            const list = [];
+                            for(let i=0; i<7; i++) {
+                              const d = new Date(kstNow.getTime() - i * 24 * 60 * 60 * 1000);
+                              const dateStr = d.toISOString().split('T')[0];
+                              const rec = dailyRecs[dateStr];
+                              if (rec) {
+                                list.push({ dateStr, rec });
+                              }
+                            }
+                            if (list.length === 0) return <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0.5rem 0' }}>최근 7일간의 기록이 없습니다.</p>;
+                            
+                            const header = (
+                              <div key="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.2rem 0.4rem 0.2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '0.2rem' }}>
+                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold' }}>날짜</span>
+                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right' }}>횟수</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '50px', textAlign: 'right' }}>시간</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right' }}>실수</span>
+                                </div>
+                              </div>
+                            );
+
+                            return [header, ...list.map((item, idx) => (
+                              <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
+                                <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-','.')}</span>
+                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '45px', textAlign: 'right' }}>{item.rec.playCount}회</span>
+                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '50px', textAlign: 'right' }}>{item.rec.bestTime.toFixed(2)}s</span>
+                                  <span style={{ color: item.rec.bestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right' }}>{item.rec.bestMistakes === 0 ? '무결점' : `${item.rec.bestMistakes}오답`}</span>
+                                </div>
+                              </div>
+                            ))];
+                          })()}
+                        </div>
+                      </div>
+
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
+                        {(() => {
+                          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                          const todayDow = kstNow.getDay();
+                          const N_WEEKS = 26; // Half a year
+                          const totalDays = N_WEEKS * 7 + (todayDow + 1);
+
+                          const dailyRecs = userProfile.dailyRecords || {};
+
+                          const getGrassColor = (count) => {
+                            if (!count || count === 0) return 'rgba(255, 255, 255, 0.05)';
+                            if (count <= 2) return '#10b981';
+                            if (count <= 5) return '#059669';
+                            if (count <= 9) return '#047857';
+                            return '#064e3b';
+                          };
+
+                          const cells = [];
+                          for (let i = 0; i < totalDays; i++) {
+                            const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
+                            const dateStr = d.toISOString().split('T')[0];
+                            const count = dailyRecs[dateStr]?.playCount || 0;
+                            const color = getGrassColor(count);
+                            const tooltip = `${dateStr} : ${count}판`;
+                            cells.push(
+                              <div key={dateStr} title={tooltip} style={{ width: '12px', height: '12px', backgroundColor: color, borderRadius: '2px', border: '1px solid rgba(255,255,255,0.1)' }} />
+                            );
+                          }
+
+                          const monthLabels = [];
+                          let lastPlacedCol = -1;
+                          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                          let prevMonth = -1;
+                          for (let i = 0; i < totalDays; i++) {
+                            const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
+                            const m = d.getMonth();
+                            const colIndex = Math.floor(i / 7);
+                            if (m !== prevMonth) {
+                              if (i !== 0 || d.getDate() <= 7) {
+                                if (colIndex > lastPlacedCol + 1) {
+                                  monthLabels.push(
+                                    <span key={`month-${i}`} style={{ position: 'absolute', left: `${colIndex * 16}px`, fontSize: '0.65rem', color: '#94a3b8', bottom: 0, lineHeight: '14px' }}>
+                                      {monthNames[m]}
+                                    </span>
+                                  );
+                                  lastPlacedCol = colIndex;
+                                }
+                              }
+                              prevMonth = m;
+                            }
+                          }
+
+                          return (
+                            <>
+                              <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>잔디 기록</h3>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', flex: 1 }}>
+                                <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: '4px', paddingRight: '0.2rem', paddingTop: '18px' }}>
+                                  <span />
+                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Mon</span>
+                                  <span />
+                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Wed</span>
+                                  <span />
+                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Fri</span>
+                                  <span />
+                                </div>
+                                <div className="custom-scroll" style={{ overflowX: 'auto', paddingBottom: '0.5rem', direction: 'rtl', flex: 1 }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', direction: 'ltr', width: 'max-content', paddingBottom: '12px' }}>
+                                    <div style={{ position: 'relative', height: '14px', marginBottom: '4px' }}>
+                                      {monthLabels}
+                                    </div>
+                                    <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(7, 12px)', gap: '4px' }}>
+                                      {cells}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -909,6 +1002,18 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
             newTodayCount = (userProfile.todayClearCount || 0) + 1;
           }
 
+          let newStreak = 1;
+          if (userProfile.lastPlayedDate) {
+            const today = new Date(todayStr);
+            const last = new Date(userProfile.lastPlayedDate);
+            const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) {
+              newStreak = userProfile.currentStreak || 0;
+            } else if (diffDays === 1) {
+              newStreak = (userProfile.currentStreak || 0) + 1;
+            }
+          }
+
           const newUnlocked = [];
           if (timeSec <= 15) newUnlocked.push('speed_15s');
           if (timeSec <= 12) newUnlocked.push('speed_12s');
@@ -917,17 +1022,56 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
           if (newTodayCount >= 5) newUnlocked.push('play_5');
           if (newTodayCount >= 10) newUnlocked.push('play_10');
           newUnlocked.push('first_clear');
+          
+          if (newStreak >= 2) newUnlocked.push('streak_2');
+          if (newStreak >= 3) newUnlocked.push('streak_3');
+          if (newStreak >= 7) newUnlocked.push('streak_7');
 
           const currentAchievements = userProfile.achievements || [];
           const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
           const updatedAchievements = [...currentAchievements, ...actualNew];
 
           const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
+          const newLongestStreak = Math.max(userProfile?.longestStreak || 0, newStreak);
+
+          const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+          const newBestRecords = [...(userProfile?.bestRecords || []), currentRecord]
+            .sort((a, b) => {
+              if (a.time !== b.time) return a.time - b.time;
+              return a.mistakes - b.mistakes;
+            })
+            .slice(0, 3);
+
+          const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+          const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+          const newPerfectClearCount = (userProfile?.perfectClearCount || 0) + (mistakes === 0 ? 1 : 0);
+
+          const dailyRecs = userProfile?.dailyRecords || {};
+          const todayDaily = dailyRecs[todayStr] || { playCount: 0, bestTime: Infinity, bestMistakes: Infinity, totalTime: 0, totalMistakes: 0 };
+          const newDailyRecords = {
+            ...dailyRecs,
+            [todayStr]: {
+              playCount: todayDaily.playCount + 1,
+              bestTime: timeSec < todayDaily.bestTime ? timeSec : (timeSec === todayDaily.bestTime ? Math.min(todayDaily.bestMistakes, mistakes) : todayDaily.bestTime),
+              bestMistakes: timeSec < todayDaily.bestTime ? mistakes : (timeSec === todayDaily.bestTime ? Math.min(todayDaily.bestMistakes, mistakes) : todayDaily.bestMistakes),
+              totalTime: (todayDaily.totalTime || 0) + timeSec,
+              totalMistakes: (todayDaily.totalMistakes || 0) + mistakes
+            }
+          };
+
           const updates = {
             todayClearDate: todayStr,
             todayClearCount: newTodayCount,
             achievements: updatedAchievements,
-            totalPlayCount: newTotalPlayCount
+            totalPlayCount: newTotalPlayCount,
+            currentStreak: newStreak,
+            lastPlayedDate: todayStr,
+            longestStreak: newLongestStreak,
+            bestRecords: newBestRecords,
+            totalPlayTime: newTotalPlayTime,
+            totalMistakes: newTotalMistakes,
+            perfectClearCount: newPerfectClearCount,
+            dailyRecords: newDailyRecords
           };
 
           await saveProfile(userProfile, updates);
@@ -1020,29 +1164,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
         timestamp: serverTimestamp()
       });
 
-      const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-      const todayStr = kstNow.toISOString().split('T')[0];
-      let newStreak = 1;
-
-      if (userProfile && userProfile.lastPlayedDate) {
-        const today = new Date(todayStr);
-        const last = new Date(userProfile.lastPlayedDate);
-        const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
-        
-        if (diffDays === 0) {
-          newStreak = userProfile.currentStreak || 0;
-        } else if (diffDays === 1) {
-          newStreak = (userProfile.currentStreak || 0) + 1;
-        } else {
-          newStreak = 1;
-        }
-      }
-
       const newUnlocked = ['leaderboard_entry'];
-      if (newStreak >= 2) newUnlocked.push('streak_2');
-      if (newStreak >= 3) newUnlocked.push('streak_3');
-      if (newStreak >= 7) newUnlocked.push('streak_7');
-
       try {
         const qList = query(scoresRef, orderBy('time', 'asc'), limit(5));
         const snap = await getDocs(qList);
@@ -1053,35 +1175,14 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
 
       const currentAchievements = userProfile?.achievements || [];
       const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
-      const updatedAchievements = [...currentAchievements, ...actualNew];
-
-      const newLongestStreak = Math.max(userProfile?.longestStreak || 0, newStreak);
-
-      const timeSec = Number((timeElapsed / 1000).toFixed(2));
-      const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
-      const newBestRecords = [...(userProfile?.bestRecords || []), currentRecord]
-        .sort((a, b) => {
-          if (a.time !== b.time) return a.time - b.time;
-          return a.mistakes - b.mistakes;
-        })
-        .slice(0, 3);
-
-      const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
-      const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
-      const newPerfectClearCount = (userProfile?.perfectClearCount || 0) + (mistakes === 0 ? 1 : 0);
-
+      
       const updates = {
-        nickname: nickname.trim(),
-        currentStreak: newStreak,
-        lastPlayedDate: todayStr,
-        achievements: updatedAchievements,
-        longestStreak: newLongestStreak,
-        bestRecords: newBestRecords,
-        totalPlayTime: newTotalPlayTime,
-        totalMistakes: newTotalMistakes,
-        perfectClearCount: newPerfectClearCount
+        nickname: nickname.trim()
       };
-
+      if (actualNew.length > 0) {
+        updates.achievements = [...currentAchievements, ...actualNew];
+      }
+      
       await saveProfile(userProfile, updates);
       if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
 
