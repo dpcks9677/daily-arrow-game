@@ -176,7 +176,7 @@ function App() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
+            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, perfectClearCount: data.perfectClearCount || 0, ...data };
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
@@ -188,7 +188,7 @@ function App() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
+            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, perfectClearCount: data.perfectClearCount || 0, ...data };
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
@@ -202,7 +202,10 @@ function App() {
               totalPlayCount: 0,
               longestStreak: 0,
               gameStartDate: todayStr,
-              bestRecords: []
+              bestRecords: [],
+              totalPlayTime: 0,
+              totalMistakes: 0,
+              perfectClearCount: 0
             };
             setUserProfile({ ...newProfile, isNew: true });
             saveSecureProfile({ ...newProfile, isNew: true });
@@ -359,6 +362,9 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         longestStreak: userProfile?.longestStreak || userProfile?.currentStreak || 0,
         gameStartDate: userProfile?.gameStartDate || issuedDateStr,
         bestRecords: userProfile?.bestRecords || [],
+        totalPlayTime: userProfile?.totalPlayTime || 0,
+        totalMistakes: userProfile?.totalMistakes || 0,
+        perfectClearCount: userProfile?.perfectClearCount || 0,
         createdAt: serverTimestamp() // 최초 등록 시간 기록
       };
 
@@ -567,7 +573,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
           <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
           <button onClick={async () => {
              const deviceId = userProfile.id;
-             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [] };
+             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalPlayTime: 0, totalMistakes: 0, perfectClearCount: 0 };
              await saveProfile(userProfile, resetData);
           }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
             모든 데이터 초기화
@@ -713,7 +719,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
                           <Flame size={20} color={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
-                          <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.longestStreak || userProfile.currentStreak || 0}</span>
+                          <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{userProfile.longestStreak || userProfile.currentStreak || 0}</span>
                         </div>
                         <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
                       </div>
@@ -735,7 +741,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                               <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}초</span>
+                                <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
                                 <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
                                   {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
                                 </span>
@@ -1060,13 +1066,20 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
         })
         .slice(0, 3);
 
+      const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+      const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+      const newPerfectClearCount = (userProfile?.perfectClearCount || 0) + (mistakes === 0 ? 1 : 0);
+
       const updates = {
         nickname: nickname.trim(),
         currentStreak: newStreak,
         lastPlayedDate: todayStr,
         achievements: updatedAchievements,
         longestStreak: newLongestStreak,
-        bestRecords: newBestRecords
+        bestRecords: newBestRecords,
+        totalPlayTime: newTotalPlayTime,
+        totalMistakes: newTotalMistakes,
+        perfectClearCount: newPerfectClearCount
       };
 
       await saveProfile(userProfile, updates);
