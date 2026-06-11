@@ -57,7 +57,7 @@ const getStreakStatus = (userProfile) => {
   const diffDaysStr = Math.round((today - last) / (1000 * 60 * 60 * 24));
   
   if (diffDaysStr <= 1) {
-    return { isActive: true, streak: userProfile.currentStreak || 1 };
+    return { isActive: true, streak: userProfile.currentStreak || 0 };
   } else {
     return { isActive: false, streak: 0 };
   }
@@ -176,7 +176,7 @@ function App() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 1, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
+            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
@@ -188,7 +188,7 @@ function App() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 1, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
+            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], ...data };
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
@@ -196,11 +196,11 @@ function App() {
               id: deviceId,
               backupCode: null,
               nickname: localStorage.getItem('arrow_game_nickname') || '',
-              currentStreak: 1,
+              currentStreak: 0,
               lastPlayedDate: '',
               achievements: [],
               totalPlayCount: 0,
-              longestStreak: 1,
+              longestStreak: 0,
               gameStartDate: todayStr,
               bestRecords: []
             };
@@ -352,11 +352,11 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         backupCode: newCode,
         backupCodeIssuedAt: issuedDateStr,
         nickname: userProfile?.nickname || '',
-        currentStreak: userProfile?.currentStreak || 1,
+        currentStreak: userProfile?.currentStreak || 0,
         lastPlayedDate: userProfile?.lastPlayedDate || '',
         achievements: userProfile?.achievements || [],
         totalPlayCount: userProfile?.totalPlayCount || 0,
-        longestStreak: userProfile?.longestStreak || userProfile?.currentStreak || 1,
+        longestStreak: userProfile?.longestStreak || userProfile?.currentStreak || 0,
         gameStartDate: userProfile?.gameStartDate || issuedDateStr,
         bestRecords: userProfile?.bestRecords || [],
         createdAt: serverTimestamp() // 최초 등록 시간 기록
@@ -567,7 +567,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
           <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
           <button onClick={async () => {
              const deviceId = userProfile.id;
-             const resetData = { achievements: [], currentStreak: 1, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 1, bestRecords: [] };
+             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [] };
              await saveProfile(userProfile, resetData);
           }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
             모든 데이터 초기화
@@ -619,7 +619,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
              const deviceId = userProfile.id;
              const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
              const todayStr = kstNow.toISOString().split('T')[0];
-             let newStreak = (userProfile?.currentStreak || 1) + 1;
+             let newStreak = (userProfile?.currentStreak || 0) + 1;
              
              const newUnlocked = ['leaderboard_entry'];
              if (newStreak >= 2) newUnlocked.push('streak_2');
@@ -630,7 +630,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
              const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
              const updatedAchievements = [...currentAchievements, ...actualNew];
 
-             const newLongestStreak = Math.max(userProfile?.longestStreak || 1, newStreak);
+             const newLongestStreak = Math.max(userProfile?.longestStreak || 0, newStreak);
 
              const timeSec = Number(debugTime) || 10;
              const mistakes = Number(debugMistakes) || 0;
@@ -1024,9 +1024,9 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
         const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
         
         if (diffDays === 0) {
-          newStreak = userProfile.currentStreak || 1;
+          newStreak = userProfile.currentStreak || 0;
         } else if (diffDays === 1) {
-          newStreak = (userProfile.currentStreak || 1) + 1;
+          newStreak = (userProfile.currentStreak || 0) + 1;
         } else {
           newStreak = 1;
         }
@@ -1049,7 +1049,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
       const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
       const updatedAchievements = [...currentAchievements, ...actualNew];
 
-      const newLongestStreak = Math.max(userProfile?.longestStreak || 1, newStreak);
+      const newLongestStreak = Math.max(userProfile?.longestStreak || 0, newStreak);
 
       const timeSec = Number((timeElapsed / 1000).toFixed(2));
       const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
