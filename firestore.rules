@@ -7,7 +7,7 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == userId
                    && (!("currentStreak" in request.resource.data) || (request.resource.data.currentStreak >= 0 && request.resource.data.currentStreak <= 10000))
-                   && (!("longestStreak" in request.resource.data) || (request.resource.data.longestStreak >= 0 && request.resource.data.longestStreak <= 10000))
+                   && (!("totalLongestStreak" in request.resource.data) || (request.resource.data.totalLongestStreak >= 0 && request.resource.data.totalLongestStreak <= 10000))
                    && (!("totalPlayCount" in request.resource.data) || (request.resource.data.totalPlayCount >= 0 && request.resource.data.totalPlayCount <= 1000000));
     }
     

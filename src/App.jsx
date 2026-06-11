@@ -176,7 +176,7 @@ function App() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, perfectClearCount: data.perfectClearCount || 0, ...data };
+            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data };
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
@@ -188,7 +188,7 @@ function App() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, longestStreak: data.longestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, bestRecords: data.bestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, perfectClearCount: data.perfectClearCount || 0, ...data };
+            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data };
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
@@ -200,12 +200,12 @@ function App() {
               lastPlayedDate: '',
               achievements: [],
               totalPlayCount: 0,
-              longestStreak: 0,
+              totalLongestStreak: 0,
               gameStartDate: todayStr,
-              bestRecords: [],
+              totalBestRecords: [],
               totalPlayTime: 0,
               totalMistakes: 0,
-              perfectClearCount: 0
+              totalPerfectClear: 0
             };
             setUserProfile({ ...newProfile, isNew: true });
             saveSecureProfile({ ...newProfile, isNew: true });
@@ -256,7 +256,8 @@ function App() {
 }
 
 function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
-  const [showHelp, setShowHelp] = useState(false);
+
+const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
@@ -361,12 +362,12 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         lastPlayedDate: userProfile?.lastPlayedDate || '',
         achievements: userProfile?.achievements || [],
         totalPlayCount: userProfile?.totalPlayCount || 0,
-        longestStreak: userProfile?.longestStreak || userProfile?.currentStreak || 0,
+        totalLongestStreak: userProfile?.totalLongestStreak || userProfile?.currentStreak || 0,
         gameStartDate: userProfile?.gameStartDate || issuedDateStr,
-        bestRecords: userProfile?.bestRecords || [],
+        totalBestRecords: userProfile?.totalBestRecords || [],
         totalPlayTime: userProfile?.totalPlayTime || 0,
         totalMistakes: userProfile?.totalMistakes || 0,
-        perfectClearCount: userProfile?.perfectClearCount || 0,
+        totalPerfectClear: userProfile?.totalPerfectClear || 0,
         createdAt: serverTimestamp() // 최초 등록 시간 기록
       };
 
@@ -415,7 +416,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
 
   return (
     <div className="start-screen">
-      <div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+<div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'default' }}>
           <Flame size={32} color={isActive ? '#ef4444' : '#64748b'} fill={isActive ? '#f97316' : 'transparent'} />
@@ -651,8 +652,8 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
-                              <Flame size={20} color={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
-                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (userProfile.longestStreak || userProfile.currentStreak || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{userProfile.longestStreak || userProfile.currentStreak || 0}</span>
+                              <Flame size={20} color={(userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{userProfile.totalLongestStreak || userProfile.currentStreak || 0}</span>
                             </div>
                             <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
                           </div>
@@ -669,10 +670,10 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                           const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
                           const todayStr = kstNow.toISOString().split('T')[0];
                           const dailyRecs = userProfile.dailyRecords || {};
-                          const todayDaily = dailyRecs[todayStr] || { playCount: 0, totalMistakes: 0, totalTime: 0 };
+                          const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayMistakes: 0, todayPlayTime: 0 };
                           
-                          const avgMistakes = todayDaily.playCount > 0 ? (todayDaily.totalMistakes / todayDaily.playCount).toFixed(1) : 0;
-                          const totalTimeSec = todayDaily.totalTime || 0;
+                          const avgMistakes = todayDaily.todayPlayCount > 0 ? (todayDaily.todayMistakes / todayDaily.todayPlayCount).toFixed(1) : 0;
+                          const totalTimeSec = todayDaily.todayPlayTime || 0;
                           const mins = Math.floor(totalTimeSec / 60);
                           const secs = Math.floor(totalTimeSec % 60);
                           const timeStr = mins > 0 ? `${mins}분 ${secs}초` : `${secs}초`;
@@ -680,7 +681,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                           return (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{todayDaily.playCount}</span>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{todayDaily.todayPlayCount}</span>
                                 <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -688,7 +689,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                                 <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>틀린 횟수 평균</span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#3b82f6', marginTop: '0.3rem' }}>{todayDaily.playCount > 0 ? timeStr : '-'}</span>
+                                <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#3b82f6', marginTop: '0.3rem' }}>{todayDaily.todayPlayCount > 0 ? timeStr : '-'}</span>
                                 <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>플레이타임</span>
                               </div>
                             </div>
@@ -698,11 +699,11 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
 
                       <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
-                        {(!userProfile.bestRecords || userProfile.bestRecords.length === 0) ? (
+                        {(!userProfile.totalBestRecords || userProfile.totalBestRecords.length === 0) ? (
                           <p className="stat-empty" style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 'auto 0', textAlign: 'center' }}>아직 등록된 기록이 없습니다.</p>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', margin: 'auto 0' }}>
-                            {userProfile.bestRecords.map((record, idx) => (
+                            {userProfile.totalBestRecords.map((record, idx) => (
                               <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                                   <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
@@ -1027,10 +1028,10 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
           const updatedAchievements = [...currentAchievements, ...actualNew];
 
           const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
-          const newLongestStreak = Math.max(userProfile?.longestStreak || 0, newStreak);
+          const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || 0, newStreak);
 
           const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
-          const newBestRecords = [...(userProfile?.bestRecords || []), currentRecord]
+          const newTotalBestRecords = [...(userProfile?.totalBestRecords || []), currentRecord]
             .sort((a, b) => {
               if (a.time !== b.time) return a.time - b.time;
               return a.mistakes - b.mistakes;
@@ -1039,18 +1040,18 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
 
           const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
           const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
-          const newPerfectClearCount = (userProfile?.perfectClearCount || 0) + (mistakes === 0 ? 1 : 0);
+          const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
 
           const dailyRecs = userProfile?.dailyRecords || {};
-          const todayDaily = dailyRecs[todayStr] || { playCount: 0, bestTime: Infinity, bestMistakes: Infinity, totalTime: 0, totalMistakes: 0 };
+          const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
           const newDailyRecords = {
             ...dailyRecs,
             [todayStr]: {
-              playCount: todayDaily.playCount + 1,
-              bestTime: timeSec < todayDaily.bestTime ? timeSec : (timeSec === todayDaily.bestTime ? Math.min(todayDaily.bestMistakes, mistakes) : todayDaily.bestTime),
-              bestMistakes: timeSec < todayDaily.bestTime ? mistakes : (timeSec === todayDaily.bestTime ? Math.min(todayDaily.bestMistakes, mistakes) : todayDaily.bestMistakes),
-              totalTime: (todayDaily.totalTime || 0) + timeSec,
-              totalMistakes: (todayDaily.totalMistakes || 0) + mistakes
+              todayPlayCount: todayDaily.todayPlayCount + 1,
+              todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+              todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+              todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+              todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
             }
           };
 
@@ -1061,11 +1062,11 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
             totalPlayCount: newTotalPlayCount,
             currentStreak: newStreak,
             lastPlayedDate: todayStr,
-            longestStreak: newLongestStreak,
-            bestRecords: newBestRecords,
+            totalLongestStreak: newTotalLongestStreak,
+            totalBestRecords: newTotalBestRecords,
             totalPlayTime: newTotalPlayTime,
             totalMistakes: newTotalMistakes,
-            perfectClearCount: newPerfectClearCount,
+            totalPerfectClear: newTotalPerfectClear,
             dailyRecords: newDailyRecords
           };
 
