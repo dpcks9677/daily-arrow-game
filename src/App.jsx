@@ -966,12 +966,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
   
   const timerRef = useRef(null)
 
-  const handleDebugSkip = () => {
-    setCurrentIndex(arrows.length);
-    setGameStatus('finished');
-    setShowModal(true);
-    triggerConfetti();
-  };
+
 
   useEffect(() => {
     setArrows(generateDailyArrows(50))
@@ -1213,9 +1208,7 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
       <div className={`game-content ${isStunned ? 'stunned' : ''}`} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div className="game-header" style={{ justifyContent: 'space-between' }}>
         <button className="back-btn" onClick={onHome}>← Home</button>
-        {import.meta.env.DEV && (
-          <button className="back-btn" style={{ color: '#fbbf24' }} onClick={handleDebugSkip}>Skip (Debug)</button>
-        )}
+
       </div>
 
       <div className="status-bar">
