@@ -394,8 +394,8 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
         const oldData = matchedDoc.data();
         
         const deviceId = userProfile.id;
-        // 현재 인증된 내 계정(deviceId) 덮어쓰기
-        await setDoc(doc(db, 'users', deviceId), oldData, { merge: true });
+        // 현재 인증된 내 계정(deviceId) 덮어쓰기 (기존 테스트 데이터가 섞이지 않도록 완전히 덮어씌움)
+        await setDoc(doc(db, 'users', deviceId), oldData);
         
         const newProfile = { id: deviceId, ...oldData };
         setUserProfile(newProfile);
@@ -641,8 +641,8 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
               ) : (
                 <>
                   {statsPage === 0 ? (
-                    <div style={{ width: '90%', margin: '0 auto', height: '675px' }}>
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ width: '90%', margin: '0 auto', height: '675px', display: 'flex', flexDirection: 'column' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -663,7 +663,7 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                         </div>
                       </div>
 
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>오늘의 기록</h3>
                         {(() => {
                           const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
@@ -696,12 +696,12 @@ function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfi
                         })()}
                       </div>
 
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '280px' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
                         {(!userProfile.bestRecords || userProfile.bestRecords.length === 0) ? (
-                          <p className="stat-empty" style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '1rem 0' }}>아직 등록된 기록이 없습니다.</p>
+                          <p className="stat-empty" style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 'auto 0', textAlign: 'center' }}>아직 등록된 기록이 없습니다.</p>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', margin: 'auto 0' }}>
                             {userProfile.bestRecords.map((record, idx) => (
                               <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
