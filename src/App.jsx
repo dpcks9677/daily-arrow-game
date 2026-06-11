@@ -676,7 +676,7 @@ const [showHelp, setShowHelp] = useState(false);
                           const totalTimeSec = todayDaily.todayPlayTime || 0;
                           const mins = Math.floor(totalTimeSec / 60);
                           const secs = Math.floor(totalTimeSec % 60);
-                          const timeStr = mins > 0 ? `${mins}분 ${secs}초` : `${secs}초`;
+                          const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
                           return (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
@@ -744,9 +744,9 @@ const [showHelp, setShowHelp] = useState(false);
                               <div key="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.2rem 0.4rem 0.2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '0.2rem' }}>
                                 <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold' }}>날짜</span>
                                 <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right' }}>횟수</span>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '50px', textAlign: 'right' }}>시간</span>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right' }}>실수</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>플레이 횟수</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>최고 기록</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>실수</span>
                                 </div>
                               </div>
                             );
@@ -755,9 +755,9 @@ const [showHelp, setShowHelp] = useState(false);
                               <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
                                 <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-','.')}</span>
                                 <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '45px', textAlign: 'right' }}>{item.rec.todayPlayCount || 0}회</span>
-                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '50px', textAlign: 'right' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
-                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right' }}>{item.rec.todayBestMistakes === 0 ? '무결점' : `${item.rec.todayBestMistakes}오답`}</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayPlayCount || 0}회</span>
+                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
+                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayBestMistakes === 0 ? '무결점' : `${item.rec.todayBestMistakes}회`}</span>
                                 </div>
                               </div>
                             ))];
