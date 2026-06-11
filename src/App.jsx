@@ -176,19 +176,19 @@ function App() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data };
+            const merged = { totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data, id: deviceId };
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
-            setUserProfile({ id: deviceId, ...localData });
+            setUserProfile({ ...localData, id: deviceId });
           }
         } else if (localData) {
-          setUserProfile({ id: deviceId, ...localData });
+          setUserProfile({ ...localData, id: deviceId });
         } else {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
-            const merged = { id: deviceId, totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data };
+            const merged = { totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data, id: deviceId };
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
@@ -398,7 +398,7 @@ const [showHelp, setShowHelp] = useState(false);
         // 현재 인증된 내 계정(deviceId) 덮어쓰기 (기존 테스트 데이터가 섞이지 않도록 완전히 덮어씌움)
         await setDoc(doc(db, 'users', deviceId), oldData);
         
-        const newProfile = { id: deviceId, ...oldData };
+        const newProfile = { ...oldData, id: deviceId };
         setUserProfile(newProfile);
         saveSecureProfile(newProfile);
         alert("계정 데이터가 성공적으로 복구되었습니다!");
