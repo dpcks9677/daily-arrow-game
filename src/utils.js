@@ -90,7 +90,7 @@ export function loadSecureProfile() {
         const calculatedHash = CryptoJS.HmacSHA256(decryptedStr, SECRET_KEY).toString();
         
         if (calculatedHash === payload.hash) {
-            return JSON.parse(decryptedStr);
+            return migrateProfileData(JSON.parse(decryptedStr));
         } else {
             console.error("Profile integrity check failed! Data tampered.");
             localStorage.removeItem('arrow_game_profile');
@@ -101,4 +101,54 @@ export function loadSecureProfile() {
         localStorage.removeItem('arrow_game_profile');
         return null;
     }
+}
+
+export function migrateProfileData(profile) {
+  if (!profile) return profile;
+  const migrated = { ...profile };
+
+  if (migrated.playCount !== undefined) {
+    migrated.totalPlayCount = migrated.playCount;
+    delete migrated.playCount;
+  }
+  if (migrated.perfectClearCount !== undefined) {
+    migrated.totalPerfectClear = migrated.perfectClearCount;
+    delete migrated.perfectClearCount;
+  }
+  if (migrated.bestRecords !== undefined) {
+    migrated.totalBestRecords = migrated.bestRecords;
+    delete migrated.bestRecords;
+  }
+  if (migrated.longestStreak !== undefined) {
+    migrated.totalLongestStreak = migrated.longestStreak;
+    delete migrated.longestStreak;
+  }
+
+  if (migrated.dailyRecords) {
+    for (const date in migrated.dailyRecords) {
+      const daily = migrated.dailyRecords[date];
+      if (daily.playCount !== undefined) {
+        daily.todayPlayCount = daily.playCount;
+        delete daily.playCount;
+      }
+      if (daily.bestTime !== undefined) {
+        daily.todayBestTime = daily.bestTime;
+        delete daily.bestTime;
+      }
+      if (daily.bestMistakes !== undefined) {
+        daily.todayBestMistakes = daily.bestMistakes;
+        delete daily.bestMistakes;
+      }
+      if (daily.totalTime !== undefined) {
+        daily.todayPlayTime = daily.totalTime;
+        delete daily.totalTime;
+      }
+      if (daily.totalMistakes !== undefined) {
+        daily.todayMistakes = daily.totalMistakes;
+        delete daily.totalMistakes;
+      }
+    }
+  }
+
+  return migrated;
 }

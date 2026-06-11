@@ -755,9 +755,9 @@ const [showHelp, setShowHelp] = useState(false);
                               <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
                                 <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-','.')}</span>
                                 <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '45px', textAlign: 'right' }}>{item.rec.playCount}회</span>
-                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '50px', textAlign: 'right' }}>{item.rec.bestTime.toFixed(2)}s</span>
-                                  <span style={{ color: item.rec.bestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right' }}>{item.rec.bestMistakes === 0 ? '무결점' : `${item.rec.bestMistakes}오답`}</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '45px', textAlign: 'right' }}>{item.rec.todayPlayCount || 0}회</span>
+                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '50px', textAlign: 'right' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
+                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right' }}>{item.rec.todayBestMistakes === 0 ? '무결점' : `${item.rec.todayBestMistakes}오답`}</span>
                                 </div>
                               </div>
                             ))];
@@ -786,7 +786,7 @@ const [showHelp, setShowHelp] = useState(false);
                           for (let i = 0; i < totalDays; i++) {
                             const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
                             const dateStr = d.toISOString().split('T')[0];
-                            const count = dailyRecs[dateStr]?.playCount || 0;
+                            const count = dailyRecs[dateStr]?.todayPlayCount || 0;
                             const color = getGrassColor(count);
                             const tooltip = `${dateStr} : ${count}판`;
                             cells.push(
