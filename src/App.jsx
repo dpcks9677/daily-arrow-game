@@ -64,24 +64,40 @@ const getStreakStatus = (userProfile) => {
 };
 
 function AchievementPopupContainer({ popups, setPopups }) {
+  const [dismissed, setDismissed] = useState([]);
+  const [summaryDismissed, setSummaryDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!popups || popups.length === 0) {
+      setDismissed([]);
+      setSummaryDismissed(false);
+    }
+  }, [popups]);
+
   if (!popups || popups.length === 0) return null;
 
+  const initialDisplay = popups.length > 3 ? popups.slice(0, 2) : popups;
+  const remainingCount = popups.length > 3 ? popups.length - 2 : 0;
+
+  const displayPopups = initialDisplay.filter(id => !dismissed.includes(id));
+  const showSummary = remainingCount > 0 && !summaryDismissed;
+
   const handleClose = (id) => {
-    setPopups(prev => prev.filter(p => p !== id));
+    setDismissed(prev => {
+      const next = [...prev, id];
+      if (initialDisplay.filter(x => !next.includes(x)).length === 0 && !showSummary) {
+        setTimeout(() => setPopups([]), 0);
+      }
+      return next;
+    });
   };
 
   const handleCloseSummary = () => {
-    setPopups(prev => prev.slice(0, 2)); // keep only the first 2, remove the rest
+    setSummaryDismissed(true);
+    if (displayPopups.length === 0) {
+      setTimeout(() => setPopups([]), 0);
+    }
   };
-
-  const displayPopups = [];
-  if (popups.length <= 3) {
-    displayPopups.push(...popups);
-  } else {
-    displayPopups.push(popups[0], popups[1]);
-  }
-
-  const remainingCount = popups.length > 3 ? popups.length - 2 : 0;
 
   return (
     <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 10000, display: 'flex', flexDirection: 'column', gap: '0.8rem', pointerEvents: 'none' }}>
@@ -101,7 +117,7 @@ function AchievementPopupContainer({ popups, setPopups }) {
           </div>
         );
       })}
-      {remainingCount > 0 && (
+      {showSummary && (
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(30, 58, 138, 0.95)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
           <button onClick={handleCloseSummary} style={{ position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✕</button>
           <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid rgba(245, 158, 11, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
@@ -575,6 +591,140 @@ const [showHelp, setShowHelp] = useState(false);
 
 
 
+      {import.meta.env.DEV && (
+        <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', background: 'rgba(0,0,0,0.8)', padding: '1rem', borderRadius: '8px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px' }}>
+          <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
+          <button onClick={async () => {
+             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalLongestStreak: 0, totalBestRecords: [], totalPlayTime: 0, totalMistakes: 0, totalPerfectClear: 0, dailyRecords: {} };
+             await saveProfile(userProfile, resetData);
+          }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+            모든 데이터 초기화
+          </button>
+          
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button onClick={async () => {
+               const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+               const todayStr = kstNow.toISOString().split('T')[0];
+               const timeSec = Number(debugTime); 
+               const mistakes = Number(debugMistakes); 
+               let newTodayCount = 1;
+               if (userProfile?.todayClearDate === todayStr) {
+                 newTodayCount = (userProfile?.todayClearCount || 0) + 1;
+               }
+               const newUnlocked = [];
+               if (timeSec <= 15) newUnlocked.push('speed_15s');
+               if (timeSec <= 12) newUnlocked.push('speed_12s');
+               if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
+               if (mistakes === 0) newUnlocked.push('flawless');
+               if (newTodayCount >= 5) newUnlocked.push('play_5');
+               if (newTodayCount >= 10) newUnlocked.push('play_10');
+               newUnlocked.push('first_clear');
+
+               const currentAchievements = userProfile?.achievements || [];
+               const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+               const updatedAchievements = [...currentAchievements, ...actualNew];
+
+               const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
+               const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+               const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+               const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
+
+               const dailyRecs = userProfile?.dailyRecords || {};
+               const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
+               const newDailyRecords = {
+                 ...dailyRecs,
+                 [todayStr]: {
+                   todayPlayCount: todayDaily.todayPlayCount + 1,
+                   todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+                   todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+                   todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+                   todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
+                 }
+               };
+
+               const updates = { 
+                 todayClearDate: todayStr, 
+                 todayClearCount: newTodayCount, 
+                 achievements: updatedAchievements,
+                 totalPlayCount: newTotalPlayCount,
+                 totalPlayTime: newTotalPlayTime,
+                 totalMistakes: newTotalMistakes,
+                 totalPerfectClear: newTotalPerfectClear,
+                 dailyRecords: newDailyRecords
+               };
+               await saveProfile(userProfile, updates);
+               if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
+            }} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', flex: 1, whiteSpace: 'nowrap' }}>
+              게임 완료 트리거
+            </button>
+            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', color: '#cbd5e1' }}>
+              <input type="number" step="0.1" value={debugTime} onChange={e => setDebugTime(e.target.value)} style={{ width: '40px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center' }} title="기록(초)" />초
+              <input type="number" value={debugMistakes} onChange={e => setDebugMistakes(e.target.value)} style={{ width: '30px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center', marginLeft: '0.25rem' }} title="실수 횟수" />회
+            </div>
+          </div>
+
+          <button onClick={async () => {
+             const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+             const todayStr = kstNow.toISOString().split('T')[0];
+             let newStreak = (userProfile?.currentStreak || 1) + 1;
+             
+             const newUnlocked = ['leaderboard_entry'];
+             if (newStreak >= 2) newUnlocked.push('streak_2');
+             if (newStreak >= 3) newUnlocked.push('streak_3');
+             if (newStreak >= 7) newUnlocked.push('streak_7');
+
+             const currentAchievements = userProfile?.achievements || [];
+             const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+             const updatedAchievements = [...currentAchievements, ...actualNew];
+
+             const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
+
+             const timeSec = Number(debugTime) || 10;
+             const mistakes = Number(debugMistakes) || 0;
+             const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+             const newTotalBestRecords = [...(userProfile?.totalBestRecords || userProfile?.bestRecords || []), currentRecord]
+               .sort((a, b) => {
+                 if (a.time !== b.time) return a.time - b.time;
+                 return a.mistakes - b.mistakes;
+               }).slice(0, 3);
+               
+             const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+             const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+             const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
+
+             const dailyRecs = userProfile?.dailyRecords || {};
+             const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
+             const newDailyRecords = {
+               ...dailyRecs,
+               [todayStr]: {
+                 todayPlayCount: todayDaily.todayPlayCount + 1,
+                 todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+                 todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+                 todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+                 todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
+               }
+             };
+
+             const updates = { 
+               currentStreak: newStreak, 
+               lastPlayedDate: todayStr, 
+               achievements: updatedAchievements, 
+               totalLongestStreak: newTotalLongestStreak, 
+               totalBestRecords: newTotalBestRecords,
+               totalPlayTime: newTotalPlayTime,
+               totalMistakes: newTotalMistakes,
+               totalPerfectClear: newTotalPerfectClear,
+               dailyRecords: newDailyRecords,
+               totalPlayCount: (userProfile?.totalPlayCount || 0) + 1
+             };
+             await saveProfile(userProfile, updates);
+             if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
+          }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
+            점수 등록 트리거 (스트릭 +1 강제 반영)
+          </button>
+        </div>
+      )}
+
       {showAchievements && (
         <div className="modal-overlay" onClick={() => setShowAchievements(false)}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
@@ -967,6 +1117,13 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
   
   const timerRef = useRef(null)
 
+  const handleDebugSkip = () => {
+    setCurrentIndex(arrows.length);
+    setGameStatus('finished');
+    setShowModal(true);
+    triggerConfetti();
+  };
+
 
 
   useEffect(() => {
@@ -1209,7 +1366,9 @@ function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, savePr
       <div className={`game-content ${isStunned ? 'stunned' : ''}`} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div className="game-header" style={{ justifyContent: 'space-between' }}>
         <button className="back-btn" onClick={onHome}>← Home</button>
-
+        {import.meta.env.DEV && (
+          <button className="back-btn" style={{ color: '#fbbf24' }} onClick={handleDebugSkip}>Skip (Debug)</button>
+        )}
       </div>
 
       <div className="status-bar">
