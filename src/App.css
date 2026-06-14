@@ -581,3 +581,14 @@ body.light-mode .ach-desc {
 body.light-mode .nickname-section {
   border-top: 1px solid rgba(0, 0, 0, 0.15) !important;
 }
+
+/* Flame Animation */
+@keyframes burn {
+  0% { transform: scale(1) translateY(0); filter: drop-shadow(0 0 2px #ef4444); }
+  50% { transform: scale(1.1) translateY(-2px); filter: drop-shadow(0 0 8px #f97316); }
+  100% { transform: scale(1) translateY(0); filter: drop-shadow(0 0 2px #ef4444); }
+}
+
+.flame-burning {
+  animation: burn 3s infinite ease-in-out;
+}

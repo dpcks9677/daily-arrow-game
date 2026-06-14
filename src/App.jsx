@@ -48,7 +48,7 @@ const triggerConfetti = () => {
 
 const getStreakStatus = (userProfile) => {
   if (!userProfile || !userProfile.lastPlayedDate) {
-    return { isActive: false, streak: 0 };
+    return { isActive: false, streak: 0, isPlayedToday: false };
   }
   const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
   const todayStr = kstNow.toISOString().split('T')[0];
@@ -56,10 +56,12 @@ const getStreakStatus = (userProfile) => {
   const last = new Date(userProfile.lastPlayedDate);
   const diffDaysStr = Math.round((today - last) / (1000 * 60 * 60 * 24));
   
+  const isPlayedToday = diffDaysStr === 0;
+
   if (diffDaysStr <= 1) {
-    return { isActive: true, streak: userProfile.currentStreak || 0 };
+    return { isActive: true, streak: userProfile.currentStreak || 0, isPlayedToday };
   } else {
-    return { isActive: false, streak: 0 };
+    return { isActive: false, streak: 0, isPlayedToday: false };
   }
 };
 
@@ -428,15 +430,15 @@ const [showHelp, setShowHelp] = useState(false);
     }
   };
 
-  const { isActive, streak } = getStreakStatus(userProfile);
+  const { isActive, streak, isPlayedToday } = getStreakStatus(userProfile);
 
   return (
     <div className="start-screen">
 <div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'default' }}>
-          <Flame size={32} color={isActive ? '#ef4444' : '#64748b'} fill={isActive ? '#f97316' : 'transparent'} />
-          <span style={{ fontWeight: 900, fontSize: '1.4rem', color: isActive ? '#f97316' : '#64748b', letterSpacing: '-1px' }}>
+          <Flame size={32} color={isPlayedToday ? '#ef4444' : '#64748b'} fill={isPlayedToday ? '#f97316' : 'transparent'} className={isPlayedToday ? 'flame-burning' : ''} />
+          <span style={{ fontWeight: 900, fontSize: '1.4rem', color: isPlayedToday ? '#f97316' : '#64748b', letterSpacing: '-1px' }}>
             {isActive ? `DAY ${streak}` : 'NO STREAK'}
           </span>
         </div>
@@ -611,6 +613,18 @@ const [showHelp, setShowHelp] = useState(false);
                if (userProfile?.todayClearDate === todayStr) {
                  newTodayCount = (userProfile?.todayClearCount || 0) + 1;
                }
+               let newStreak = 1;
+               if (userProfile?.lastPlayedDate) {
+                 const today = new Date(todayStr);
+                 const last = new Date(userProfile.lastPlayedDate);
+                 const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
+                 if (diffDays === 0) {
+                   newStreak = userProfile.currentStreak || 0;
+                 } else if (diffDays === 1) {
+                   newStreak = (userProfile.currentStreak || 0) + 1;
+                 }
+               }
+
                const newUnlocked = [];
                if (timeSec <= 15) newUnlocked.push('speed_15s');
                if (timeSec <= 12) newUnlocked.push('speed_12s');
@@ -620,11 +634,24 @@ const [showHelp, setShowHelp] = useState(false);
                if (newTodayCount >= 10) newUnlocked.push('play_10');
                newUnlocked.push('first_clear');
 
+               if (newStreak >= 2) newUnlocked.push('streak_2');
+               if (newStreak >= 3) newUnlocked.push('streak_3');
+               if (newStreak >= 7) newUnlocked.push('streak_7');
+
                const currentAchievements = userProfile?.achievements || [];
                const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
                const updatedAchievements = [...currentAchievements, ...actualNew];
 
                const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
+               const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
+
+               const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+               const newTotalBestRecords = [...(userProfile?.totalBestRecords || userProfile?.bestRecords || []), currentRecord]
+                 .sort((a, b) => {
+                   if (a.time !== b.time) return a.time - b.time;
+                   return a.mistakes - b.mistakes;
+                 }).slice(0, 3);
+
                const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
                const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
                const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
@@ -647,6 +674,10 @@ const [showHelp, setShowHelp] = useState(false);
                  todayClearCount: newTodayCount, 
                  achievements: updatedAchievements,
                  totalPlayCount: newTotalPlayCount,
+                 currentStreak: newStreak,
+                 lastPlayedDate: todayStr,
+                 totalLongestStreak: newTotalLongestStreak,
+                 totalBestRecords: newTotalBestRecords,
                  totalPlayTime: newTotalPlayTime,
                  totalMistakes: newTotalMistakes,
                  totalPerfectClear: newTotalPerfectClear,
