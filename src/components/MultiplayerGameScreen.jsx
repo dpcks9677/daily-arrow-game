@@ -29,9 +29,20 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
   useEffect(() => {
     const roomRef = ref(rtdb, `rooms/${roomId}`);
     const unsubscribe = onValue(roomRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        setRoomData(data);
+      if (!snapshot.exists()) {
+        // Room deleted
+        onHome();
+        return;
+      }
+      const data = snapshot.val();
+      
+      // 만약 내 데이터가 사라졌다면(방에서 강퇴당했거나 다른 탭에서 나갔다면) 로비로 튕기게 처리
+      if (!data.players || !data.players[userId]) {
+        onHome();
+        return;
+      }
+
+      setRoomData(data);
         
         // Check if all players are finished or disconnected
         const players = data.players || {};
@@ -39,13 +50,9 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
         if (allDone && gameStatus === 'finished') {
           setIsAllFinished(true);
         }
-      } else {
-        // Room destroyed
-        onHome();
-      }
     });
     return () => unsubscribe();
-  }, [roomId, gameStatus, onHome]);
+  }, [roomId, gameStatus, onHome, userId]);
 
   // Initial Setup & Countdown
   useEffect(() => {

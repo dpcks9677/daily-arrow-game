@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, LogOut, Play, UserPlus, CheckCircle, Circle, Copy } from 'lucide-react';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, get } from 'firebase/database';
 import { rtdb } from '../firebase';
 import { createRoom, joinRoom, leaveRoom, toggleReady, startGame } from '../multiplayerUtils';
 
@@ -23,6 +23,15 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
     const unsubscribe = onValue(roomRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
+        
+        // 내가 방에서 강퇴당했거나 데이터가 사라진 경우 처리
+        if (!data.players || !data.players[userId]) {
+          setRoomId('');
+          setRoomData(null);
+          setError('방에서 강퇴당했거나 연결이 끊어졌습니다.');
+          return;
+        }
+
         setRoomData(data);
 
         // If game started, navigate to GameScreen (but pass roomId to indicate multiplayer)
@@ -46,20 +55,27 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
     const replayStartedAt = roomData.replayStartedAt;
     if (!replayStartedAt) return;
 
-    const checkTimeout = () => {
-      const players = roomData.players || {};
-      const replayIds = Object.keys(players).filter(id => players[id].wantsReplay);
-      replayIds.sort();
+    const checkTimeout = async () => {
+      try {
+        const snapshot = await get(ref(rtdb, `rooms/${roomId}/players`));
+        if (snapshot.exists()) {
+          const latestPlayers = snapshot.val();
+          const replayIds = Object.keys(latestPlayers).filter(id => latestPlayers[id].wantsReplay);
+          replayIds.sort();
 
-      // 중복 호출 방지를 위해 다시하기를 누른 첫 번째 유저가 강퇴 처리
-      if (replayIds.length > 0 && replayIds[0] === userId) {
-        Object.keys(players).forEach(id => {
-          const p = players[id];
-          // 아직 결정을 안 내렸거나 남아있는 경우
-          if (p.finishedAt && !p.wantsReplay) {
-            leaveRoom(roomId, id);
+          // 중복 호출 방지를 위해 다시하기를 누른 첫 번째 유저가 강퇴 처리
+          if (replayIds.length > 0 && replayIds[0] === userId) {
+            Object.keys(latestPlayers).forEach(id => {
+              const p = latestPlayers[id];
+              // 아직 결정을 안 내렸거나 남아있는 경우
+              if (p.finishedAt && !p.wantsReplay) {
+                leaveRoom(roomId, id);
+              }
+            });
           }
-        });
+        }
+      } catch (e) {
+        console.error("Kick timeout error:", e);
       }
     };
 
