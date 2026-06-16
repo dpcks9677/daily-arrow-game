@@ -494,7 +494,7 @@ const [showHelp, setShowHelp] = useState(false);
 
       {showAchievements && (
         <div className="modal-overlay" onClick={() => setShowAchievements(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '510px', width: '95%' }}>
               <button className="close-btn" onClick={() => setShowAchievements(false)}>✕</button>
               <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>도전과제</h2>
               

@@ -25,11 +25,7 @@ function App() {
   const [unlockedPopups, setUnlockedPopups] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  useEffect(() => {
-    if (currentScreen === 'start') {
-      setUnlockedPopups([]);
-    }
-  }, [currentScreen]);
+
 
   useEffect(() => {
     if (isDarkMode) {

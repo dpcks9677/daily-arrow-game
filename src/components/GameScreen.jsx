@@ -104,6 +104,22 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
     }
   }, [handleKeyDown])
 
+  const handleHomeClick = async () => {
+    if (gameStatus !== 'finished' && userProfile && userProfile.backupCode) {
+      const currentAchievements = userProfile.achievements || [];
+      if (!currentAchievements.includes('quit_once')) {
+        const updatedAchievements = [...currentAchievements, 'quit_once'];
+        try {
+          await saveProfile(userProfile, { achievements: updatedAchievements });
+          setUnlockedPopups(prev => [...prev, 'quit_once']);
+        } catch (e) {
+          console.error("Failed to unlock quit_once:", e);
+        }
+      }
+    }
+    onHome();
+  };
+
   const shareResult = () => {
     const timeSec = (timeElapsed / 1000).toFixed(2);
     const scoreText = mistakes === 0 ? '✨ Perfect Clear!' : `🎯 ${50 - mistakes}/50 (Mistakes: ${mistakes})`;
@@ -193,7 +209,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
     <div className="game-screen">
       <div className={`game-content ${isStunned ? 'stunned' : ''}`} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div className="game-header" style={{ justifyContent: 'space-between' }}>
-        <button className="back-btn" onClick={onHome}>← Home</button>
+        <button className="back-btn" onClick={handleHomeClick}>← Home</button>
         {import.meta.env.DEV && (
           <button className="back-btn" style={{ color: '#fbbf24' }} onClick={handleDebugSkip}>Skip (Debug)</button>
         )}

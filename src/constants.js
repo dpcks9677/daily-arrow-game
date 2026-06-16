@@ -10,5 +10,6 @@ export const ACHIEVEMENTS = [
   { id: 'speed_9_8s', title: '중력가속도처럼 빠르게', desc: '게임을 9.8초 이내로 완료하세요.' },
   { id: 'flawless', title: '무결점', desc: '한 번의 실수도 없이 게임을 완료하세요.' },
   { id: 'play_5', title: '반복은 기본이다', desc: '하루 안에 게임을 5번 완료하세요.' },
-  { id: 'play_10', title: '열번 찍어 안 넘어가는 나무 없다', desc: '하루 안에 게임을 10번 완료하세요.' }
+  { id: 'play_10', title: '열번 찍어 안 넘어가는 나무 없다', desc: '하루 안에 게임을 10번 완료하세요.' },
+  { id: 'quit_once', title: '아 잘못 눌렀다', desc: '게임을 완료하지 않고 1회 나가세요.' }
 ];
