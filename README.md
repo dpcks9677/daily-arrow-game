@@ -4,7 +4,7 @@
 
 # 플레이 링크
 
-[https://arrow-game-19120.web.app/](https://daily-arrow.web.app/)
+https://daily-arrow.web.app
 
 ## 📝 라이선스
 MIT License
