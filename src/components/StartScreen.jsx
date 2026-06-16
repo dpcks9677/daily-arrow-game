@@ -98,8 +98,8 @@ const [showHelp, setShowHelp] = useState(false);
       }
 
       const deviceId = userProfile.id;
-      const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-      const issuedDateStr = kstNow.toISOString().split('T')[0];
+      const kstNow = getKSTDate();
+      const issuedDateStr = getKSTDateString();
       
       // 백업 코드를 발급받는 유저는 계속 플레이할 진성 유저일 확률이 높으므로,
       // 데이터베이스 구조의 일관성을 위해 나머지 기본 요소들도 함께 생성해줍니다.
@@ -343,8 +343,8 @@ const [showHelp, setShowHelp] = useState(false);
           
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button onClick={async () => {
-               const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-               const todayStr = kstNow.toISOString().split('T')[0];
+               const kstNow = getKSTDate();
+               const todayStr = getKSTDateString();
                const timeSec = Number(debugTime); 
                const mistakes = Number(debugMistakes); 
                let newTodayCount = 1;
@@ -433,8 +433,8 @@ const [showHelp, setShowHelp] = useState(false);
           </div>
 
           <button onClick={async () => {
-             const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-             const todayStr = kstNow.toISOString().split('T')[0];
+             const kstNow = getKSTDate();
+             const todayStr = getKSTDateString();
              let newStreak = (userProfile?.currentStreak || 1) + 1;
              
              const newUnlocked = ['leaderboard_entry'];
@@ -586,8 +586,8 @@ const [showHelp, setShowHelp] = useState(false);
                       <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>오늘의 기록</h3>
                         {(() => {
-                          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-                          const todayStr = kstNow.toISOString().split('T')[0];
+                          const kstNow = getKSTDate();
+                          const todayStr = getKSTDateString();
                           const dailyRecs = userProfile.dailyRecords || {};
                           const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayMistakes: 0, todayPlayTime: 0, todayTrials: 0 };
                           
@@ -659,7 +659,7 @@ const [showHelp, setShowHelp] = useState(false);
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
                           {(() => {
                             const dailyRecs = userProfile.dailyRecords || {};
-                            const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                            const kstNow = getKSTDate();
                             const list = [];
                             for(let i=0; i<7; i++) {
                               const d = new Date(kstNow.getTime() - i * 24 * 60 * 60 * 1000);
@@ -698,7 +698,7 @@ const [showHelp, setShowHelp] = useState(false);
 
                       <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
                         {(() => {
-                          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                          const kstNow = getKSTDate();
                           const todayDow = kstNow.getDay();
                           const N_WEEKS = 26; // Half a year
                           const totalDays = N_WEEKS * 7 + (todayDow + 1);

@@ -63,7 +63,7 @@ function App() {
         const localData = loadSecureProfile();
         const userRef = doc(db, 'users', deviceId);
 
-        if (localData && localData.backupCode) {
+        const fetchAndMerge = async (fallbackProfile) => {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const data = userSnap.data();
@@ -71,36 +71,32 @@ function App() {
             setUserProfile(merged);
             saveSecureProfile(merged);
           } else {
-            setUserProfile({ ...localData, id: deviceId });
+            setUserProfile(fallbackProfile);
+            saveSecureProfile(fallbackProfile);
           }
+        };
+
+        if (localData && localData.backupCode) {
+          await fetchAndMerge({ ...localData, id: deviceId });
         } else if (localData) {
           setUserProfile({ ...localData, id: deviceId });
         } else {
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            const merged = { totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data, id: deviceId };
-            setUserProfile(merged);
-            saveSecureProfile(merged);
-          } else {
-            const newProfile = {
-              id: deviceId,
-              backupCode: null,
-              nickname: localStorage.getItem('arrow_game_nickname') || '',
-              currentStreak: 0,
-              lastPlayedDate: '',
-              achievements: [],
-              totalPlayCount: 0,
-              totalLongestStreak: 0,
-              gameStartDate: todayStr,
-              totalBestRecords: [],
-              totalPlayTime: 0,
-              totalMistakes: 0,
-              totalPerfectClear: 0
-            };
-            setUserProfile({ ...newProfile, isNew: true });
-            saveSecureProfile({ ...newProfile, isNew: true });
-          }
+          await fetchAndMerge({
+            id: deviceId,
+            backupCode: null,
+            nickname: localStorage.getItem('arrow_game_nickname') || '',
+            currentStreak: 0,
+            lastPlayedDate: '',
+            achievements: [],
+            totalPlayCount: 0,
+            totalLongestStreak: 0,
+            gameStartDate: todayStr,
+            totalBestRecords: [],
+            totalPlayTime: 0,
+            totalMistakes: 0,
+            totalPerfectClear: 0,
+            isNew: true
+          });
         }
       } catch (error) {
         console.error("Anonymous auth failed:", error);
