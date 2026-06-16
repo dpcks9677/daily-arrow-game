@@ -1,4 +1,5 @@
 import CryptoJS from 'crypto-js';
+import confetti from 'canvas-confetti';
 
 export function getByteLength(str) {
   let byteLen = 0;
@@ -14,6 +15,139 @@ export function getDailySeed() {
     const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
     return seed;
 }
+
+export function getKSTDate() {
+    return new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+}
+
+export function getKSTDateString() {
+    return getKSTDate().toISOString().split('T')[0];
+}
+
+export function processGameCompletion(userProfile, timeSec, mistakes) {
+    if (!userProfile) return null;
+    const todayStr = getKSTDateString();
+    
+    let newTodayCount = 1;
+    if (userProfile.todayClearDate === todayStr) {
+      newTodayCount = (userProfile.todayClearCount || 0) + 1;
+    }
+
+    let newStreak = 1;
+    if (userProfile.lastPlayedDate) {
+      const today = new Date(todayStr);
+      const last = new Date(userProfile.lastPlayedDate);
+      const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) {
+        newStreak = userProfile.currentStreak || 0;
+      } else if (diffDays === 1) {
+        newStreak = (userProfile.currentStreak || 0) + 1;
+      }
+    }
+
+    const newUnlocked = [];
+    if (timeSec <= 15) newUnlocked.push('speed_15s');
+    if (timeSec <= 12) newUnlocked.push('speed_12s');
+    if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
+    if (mistakes === 0) newUnlocked.push('flawless');
+    if (newTodayCount >= 5) newUnlocked.push('play_5');
+    if (newTodayCount >= 10) newUnlocked.push('play_10');
+    newUnlocked.push('first_clear');
+    
+    if (newStreak >= 2) newUnlocked.push('streak_2');
+    if (newStreak >= 3) newUnlocked.push('streak_3');
+    if (newStreak >= 7) newUnlocked.push('streak_7');
+
+    const currentAchievements = userProfile.achievements || [];
+    const actualNew = userProfile.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+    const updatedAchievements = [...currentAchievements, ...actualNew];
+
+    const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
+    const newTotalLongestStreak = Math.max(userProfile.totalLongestStreak || userProfile.longestStreak || 0, newStreak);
+
+    const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+    const newTotalBestRecords = [...(userProfile.totalBestRecords || userProfile.bestRecords || []), currentRecord]
+      .sort((a, b) => {
+        if (a.time !== b.time) return a.time - b.time;
+        return a.mistakes - b.mistakes;
+      })
+      .slice(0, 3);
+
+    const newTotalPlayTime = Number(((userProfile.totalPlayTime || 0) + timeSec).toFixed(2));
+    const newTotalMistakes = (userProfile.totalMistakes || 0) + mistakes;
+    const newTotalPerfectClear = (userProfile.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
+
+    const dailyRecs = userProfile.dailyRecords || {};
+    const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0, todayTrials: 0 };
+    const newDailyRecords = {
+      ...dailyRecs,
+      [todayStr]: {
+        ...todayDaily,
+        todayPlayCount: (todayDaily.todayPlayCount || 0) + 1,
+        todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+        todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+        todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+        todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
+      }
+    };
+
+    const updates = {
+      todayClearDate: todayStr,
+      todayClearCount: newTodayCount,
+      achievements: updatedAchievements,
+      totalPlayCount: newTotalPlayCount,
+      currentStreak: newStreak,
+      lastPlayedDate: todayStr,
+      totalLongestStreak: newTotalLongestStreak,
+      totalBestRecords: newTotalBestRecords,
+      totalPlayTime: newTotalPlayTime,
+      totalMistakes: newTotalMistakes,
+      totalPerfectClear: newTotalPerfectClear,
+      dailyRecords: newDailyRecords
+    };
+
+    return { updates, actualNew };
+}
+
+export const triggerConfetti = () => {
+  const commonOptions = {
+    particleCount: 80,
+    spread: 70,
+    scalar: 1.8,
+    colors: ['#ef4444', '#3b82f6', '#facc15'],
+    startVelocity: 50
+  };
+
+  confetti({
+    ...commonOptions,
+    angle: 60,
+    origin: { x: 0, y: 0.45 }
+  });
+
+  confetti({
+    ...commonOptions,
+    angle: 120,
+    origin: { x: 1, y: 0.45 }
+  });
+};
+
+export const getStreakStatus = (userProfile) => {
+  if (!userProfile || !userProfile.lastPlayedDate) {
+    return { isActive: false, streak: 0, isPlayedToday: false };
+  }
+  const todayStr = getKSTDateString();
+  const today = new Date(todayStr);
+  const last = new Date(userProfile.lastPlayedDate);
+  const diffDaysStr = Math.round((today - last) / (1000 * 60 * 60 * 24));
+  
+  const isPlayedToday = diffDaysStr === 0;
+
+  if (diffDaysStr <= 1) {
+    return { isActive: true, streak: userProfile.currentStreak || 0, isPlayedToday };
+  } else {
+    return { isActive: false, streak: 0, isPlayedToday: false };
+  }
+};
 
 // Seeded PRNG (Mulberry32)
 function mulberry32(a) {
