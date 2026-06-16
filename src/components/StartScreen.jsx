@@ -591,9 +591,7 @@ const [showHelp, setShowHelp] = useState(false);
                           
                           const avgMistakes = todayDaily.todayPlayCount > 0 ? (todayDaily.todayMistakes / todayDaily.todayPlayCount).toFixed(1) : 0;
                           const totalTimeSec = todayDaily.todayPlayTime || 0;
-                          const mins = Math.floor(totalTimeSec / 60);
-                          const secs = Math.floor(totalTimeSec % 60);
-                          const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                          const timeStr = `${Math.floor(totalTimeSec)}s`;
 
                           return (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
@@ -609,9 +607,9 @@ const [showHelp, setShowHelp] = useState(false);
                                 <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{avgMistakes}</span>
                                 <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>틀린 횟수 평균</span>
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', justifyContent: 'center' }}>
-                                <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#3b82f6', marginTop: '0.3rem' }}>{todayDaily.todayPlayCount > 0 ? timeStr : '-'}</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이타임</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3b82f6' }}>{todayDaily.todayPlayCount > 0 ? timeStr : '-'}</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이한<br />시간</span>
                               </div>
                             </div>
                           );
