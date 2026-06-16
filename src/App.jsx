@@ -18,7 +18,10 @@ function App() {
     if (saved !== null) return saved === 'dark';
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
-  const [userProfile, setUserProfile] = useState(null);
+  const [userProfile, setUserProfile] = useState(() => {
+    const localData = loadSecureProfile();
+    return localData || null;
+  });
   const [unlockedPopups, setUnlockedPopups] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
@@ -126,9 +129,7 @@ function App() {
     });
   };
 
-  if (isAuthLoading) {
-    return <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#f8fafc' }}><h3>서버 연결 중...</h3></div>;
-  }
+  // Full-screen loader removed to implement Optimistic UI
 
   const handlePlay = async () => {
     if (userProfile) {
@@ -157,7 +158,7 @@ function App() {
       {unlockedPopups.length > 0 && (
         <AchievementPopupContainer popups={unlockedPopups} setPopups={setUnlockedPopups} />
       )}
-      {currentScreen === 'start' && <StartScreen onPlay={handlePlay} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {currentScreen === 'start' && <StartScreen onPlay={handlePlay} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} isAuthLoading={isAuthLoading} />}
       {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>

@@ -592,3 +592,29 @@ body.light-mode .nickname-section {
 .flame-burning {
   animation: burn 3s infinite ease-in-out;
 }
+
+/* Sync Loader */
+.sync-loader-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  margin-top: 2.4rem;
+  font-size: 10px;
+  color: #94a3b8;
+  height: 14px;
+}
+
+.sync-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(148, 163, 184, 0.3);
+  border-top-color: #94a3b8;
+  border-radius: 50%;
+  animation: sync-spin 1s linear infinite;
+  box-sizing: border-box;
+}
+
+@keyframes sync-spin {
+  to { transform: rotate(360deg); }
+}

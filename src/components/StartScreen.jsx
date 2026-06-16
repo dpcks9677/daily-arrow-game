@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { getByteLength, generateBackupCode, saveSecureProfile, getKSTDate, getKSTDateString, processGameCompletion, getStreakStatus } from '../utils';
 import { ACHIEVEMENTS } from '../constants';
 
-export default function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
+export default function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, saveProfile, setUnlockedPopups, isAuthLoading }) {
 
 const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -302,9 +302,15 @@ const [showHelp, setShowHelp] = useState(false);
       <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요! (매일 자정 갱신)</p>
       
       <div className="button-group">
-        <button className="primary-btn" onClick={onPlay}>Play</button>
-        <button className="secondary-btn" onClick={onLeaderboard}>Leaderboard</button>
+        <button className="primary-btn" onClick={onPlay} disabled={isAuthLoading}>Play</button>
+        <button className="secondary-btn" onClick={onLeaderboard} disabled={isAuthLoading}>Leaderboard</button>
       </div>
+      {isAuthLoading && (
+        <div className="sync-loader-container">
+          <div className="sync-spinner"></div>
+          <span>동기화 중</span>
+        </div>
+      )}
 
       {showHelp && (
         <div className="modal-overlay" onClick={() => setShowHelp(false)}>
