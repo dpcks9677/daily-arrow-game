@@ -261,12 +261,35 @@ function App() {
     return <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#f8fafc' }}><h3>서버 연결 중...</h3></div>;
   }
 
+  const handlePlay = async () => {
+    if (userProfile) {
+      const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+      const todayStr = kstNow.toISOString().split('T')[0];
+      const dailyRecs = userProfile.dailyRecords || {};
+      const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0, todayTrials: 0 };
+      
+      const newDailyRecords = {
+        ...dailyRecs,
+        [todayStr]: {
+          ...todayDaily,
+          todayTrials: (todayDaily.todayTrials || 0) + 1
+        }
+      };
+
+      saveProfile(userProfile, {
+        totalTrials: (userProfile.totalTrials || 0) + 1,
+        dailyRecords: newDailyRecords
+      });
+    }
+    setCurrentScreen('game');
+  };
+
   return (
     <div className="app-container">
       {unlockedPopups.length > 0 && (
         <AchievementPopupContainer popups={unlockedPopups} setPopups={setUnlockedPopups} />
       )}
-      {currentScreen === 'start' && <StartScreen onPlay={() => setCurrentScreen('game')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {currentScreen === 'start' && <StartScreen onPlay={handlePlay} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
       {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>
@@ -851,7 +874,7 @@ const [showHelp, setShowHelp] = useState(false);
                           const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
                           const todayStr = kstNow.toISOString().split('T')[0];
                           const dailyRecs = userProfile.dailyRecords || {};
-                          const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayMistakes: 0, todayPlayTime: 0 };
+                          const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayMistakes: 0, todayPlayTime: 0, todayTrials: 0 };
                           
                           const avgMistakes = todayDaily.todayPlayCount > 0 ? (todayDaily.todayMistakes / todayDaily.todayPlayCount).toFixed(1) : 0;
                           const totalTimeSec = todayDaily.todayPlayTime || 0;
@@ -860,18 +883,22 @@ const [showHelp, setShowHelp] = useState(false);
                           const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
                           return (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fbbf24' }}>{todayDaily.todayTrials || 0}</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>시도한<br />게임 수</span>
+                              </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                                 <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{todayDaily.todayPlayCount}</span>
-                                <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>완료한<br />게임 수</span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                                 <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{avgMistakes}</span>
-                                <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>틀린 횟수 평균</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>틀린 횟수 평균</span>
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', justifyContent: 'center' }}>
                                 <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#3b82f6', marginTop: '0.3rem' }}>{todayDaily.todayPlayCount > 0 ? timeStr : '-'}</span>
-                                <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>플레이타임</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이타임</span>
                               </div>
                             </div>
                           );
@@ -880,26 +907,34 @@ const [showHelp, setShowHelp] = useState(false);
 
                       <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
-                        {(!userProfile.totalBestRecords || userProfile.totalBestRecords.length === 0) ? (
-                          <p className="stat-empty" style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 'auto 0', textAlign: 'center' }}>아직 등록된 기록이 없습니다.</p>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', margin: 'auto 0' }}>
-                            {userProfile.totalBestRecords.map((record, idx) => (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', margin: 'auto 0' }}>
+                          {[0, 1, 2].map((idx) => {
+                            const record = userProfile.totalBestRecords ? userProfile.totalBestRecords[idx] : null;
+                            return (
                               <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                                   <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                    <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
-                                    <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
-                                      {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
-                                    </span>
+                                    {record ? (
+                                      <>
+                                        <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
+                                        <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
+                                          {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#94a3b8' }}>기록 없음</span>
+                                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>-</span>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
-                                <span className="stat-date" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record.date}</span>
+                                <span className="stat-date" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record ? record.date : '-'}</span>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -938,7 +973,7 @@ const [showHelp, setShowHelp] = useState(false);
                                 <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
                                   <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayPlayCount || 0}회</span>
                                   <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
-                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayBestMistakes === 0 ? '무결점' : `${item.rec.todayBestMistakes}회`}</span>
+                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayBestMistakes === 0 ? '0회' : `${item.rec.todayBestMistakes}회`}</span>
                                 </div>
                               </div>
                             ))];
@@ -955,12 +990,12 @@ const [showHelp, setShowHelp] = useState(false);
 
                           const dailyRecs = userProfile.dailyRecords || {};
 
-                          const getGrassColor = (count) => {
-                            if (!count || count === 0) return 'rgba(255, 255, 255, 0.05)';
-                            if (count <= 2) return '#10b981';
-                            if (count <= 5) return '#059669';
-                            if (count <= 9) return '#047857';
-                            return '#064e3b';
+                          const getGrassStyle = (count) => {
+                            if (!count || count === 0) return { backgroundColor: 'rgba(255, 255, 255, 0.05)' };
+                            if (count <= 2) return { backgroundColor: '#065f46' }; // 어두운 초록
+                            if (count <= 5) return { backgroundColor: '#059669' }; // 중간 초록
+                            if (count <= 9) return { backgroundColor: '#10b981' }; // 밝은 에메랄드
+                            return { backgroundColor: '#34d399', boxShadow: '0 0 6px rgba(52, 211, 153, 0.8)' }; // 형광 네온 그린 + 빛바램
                           };
 
                           const cells = [];
@@ -968,10 +1003,10 @@ const [showHelp, setShowHelp] = useState(false);
                             const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
                             const dateStr = d.toISOString().split('T')[0];
                             const count = dailyRecs[dateStr]?.todayPlayCount || 0;
-                            const color = getGrassColor(count);
+                            const customStyle = getGrassStyle(count);
                             const tooltip = `${dateStr} : ${count}판`;
                             cells.push(
-                              <div key={dateStr} title={tooltip} style={{ width: '12px', height: '12px', backgroundColor: color, borderRadius: '2px', border: '1px solid rgba(255,255,255,0.1)' }} />
+                              <div key={dateStr} title={tooltip} style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', ...customStyle }} />
                             );
                           }
 
