@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight } from 'lucide-react';
 import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { generateDailyArrows, processGameCompletion, getDailySeed, getByteLength } from '../utils';
+import { generateDailyArrows, processGameCompletion, getDailySeed, getByteLength, getKSTDateString } from '../utils';
 import { triggerConfetti } from '../utils';
 
 export default function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
@@ -76,6 +76,25 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
     if (gameStatus === 'waiting') {
       setGameStatus('playing')
       setStartTime(performance.now())
+
+      if (userProfile && userProfile.backupCode) {
+        const todayStr = getKSTDateString();
+        const dailyRecs = userProfile.dailyRecords || {};
+        const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0, todayTrials: 0 };
+        
+        const newDailyRecords = {
+          ...dailyRecs,
+          [todayStr]: {
+            ...todayDaily,
+            todayTrials: (todayDaily.todayTrials || 0) + 1
+          }
+        };
+
+        saveProfile(userProfile, {
+          totalTrials: (userProfile.totalTrials || 0) + 1,
+          dailyRecords: newDailyRecords
+        }).catch(e => console.error("Error saving trial count:", e));
+      }
     }
 
     const expectedArrow = arrows[currentIndex];
@@ -105,7 +124,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
   }, [handleKeyDown])
 
   const handleHomeClick = async () => {
-    if (gameStatus !== 'finished' && userProfile && userProfile.backupCode) {
+    if (gameStatus === 'playing' && userProfile && userProfile.backupCode) {
       const currentAchievements = userProfile.achievements || [];
       if (!currentAchievements.includes('quit_once')) {
         const updatedAchievements = [...currentAchievements, 'quit_once'];

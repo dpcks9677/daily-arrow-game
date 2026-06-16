@@ -124,24 +124,6 @@ function App() {
   // Full-screen loader removed to implement Optimistic UI
 
   const handlePlay = async () => {
-    if (userProfile) {
-      const todayStr = getKSTDateString();
-      const dailyRecs = userProfile.dailyRecords || {};
-      const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0, todayTrials: 0 };
-      
-      const newDailyRecords = {
-        ...dailyRecs,
-        [todayStr]: {
-          ...todayDaily,
-          todayTrials: (todayDaily.todayTrials || 0) + 1
-        }
-      };
-
-      saveProfile(userProfile, {
-        totalTrials: (userProfile.totalTrials || 0) + 1,
-        dailyRecords: newDailyRecords
-      });
-    }
     setCurrentScreen('game');
   };
 
