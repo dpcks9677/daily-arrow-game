@@ -1,7 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
-
 :root {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-main: 'Pretendard Variable', Pretendard, system-ui, -apple-system, sans-serif;
+  --font-title: var(--font-main);
+  font-family: var(--font-main);
   line-height: 1.5;
   font-weight: 400;
   color-scheme: dark;

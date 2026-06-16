@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { getByteLength, generateBackupCode, saveSecureProfile, getKSTDate, getKSTDateString, processGameCompletion, getStreakStatus } from '../utils';
 import { ACHIEVEMENTS } from '../constants';
 
-export default function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, saveProfile, setUnlockedPopups, isAuthLoading }) {
+export default function StartScreen({ onPlay, onMultiplayer, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, saveProfile, setUnlockedPopups, isAuthLoading }) {
 
 const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -170,7 +170,7 @@ const [showHelp, setShowHelp] = useState(false);
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'default' }}>
           <Flame size={32} color={isPlayedToday ? '#ef4444' : '#64748b'} fill={isPlayedToday ? '#f97316' : 'transparent'} className={isPlayedToday ? 'flame-burning' : ''} />
-          <span style={{ fontWeight: 900, fontSize: '1.4rem', color: isPlayedToday ? '#f97316' : '#64748b', letterSpacing: '-1px' }}>
+          <span style={{ fontWeight: 'bold', fontSize: '1.4rem', color: isPlayedToday ? '#f97316' : '#64748b', letterSpacing: '-1px' }}>
             {isActive ? `DAY ${streak}` : 'NO STREAK'}
           </span>
         </div>
@@ -297,12 +297,13 @@ const [showHelp, setShowHelp] = useState(false);
         </div>
       </div>
       <h1 style={{ marginTop: '60px' }}>
-        Daily Arrow
+        Daily 50 Arrows
       </h1>
       <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요! (매일 자정 갱신)</p>
       
       <div className="button-group">
         <button className="primary-btn" onClick={onPlay} disabled={isAuthLoading}>Play</button>
+        <button className="primary-btn" onClick={onMultiplayer} disabled={isAuthLoading}>Multiplay</button>
         <button className="secondary-btn" onClick={onLeaderboard} disabled={isAuthLoading}>Leaderboard</button>
       </div>
       <div className="sync-loader-container" style={{ visibility: isAuthLoading ? 'visible' : 'hidden' }}>
@@ -333,7 +334,7 @@ const [showHelp, setShowHelp] = useState(false);
         <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', background: 'rgba(0,0,0,0.8)', padding: '1rem', borderRadius: '8px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px' }}>
           <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
           <button onClick={async () => {
-             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalLongestStreak: 0, totalBestRecords: [], totalPlayTime: 0, totalMistakes: 0, totalPerfectClear: 0, dailyRecords: {} };
+             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalLongestStreak: 0, totalBestRecords: [], totalPlayTime: 0, totalMistakes: 0, totalPerfectClear: 0, dailyRecords: {}, multiplayerPlays: 0, multiplayerWins: 0, multiplayerCompletions: 0, multiplayerBestTime: null };
              await saveProfile(userProfile, resetData);
           }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
             모든 데이터 초기화
@@ -559,8 +560,8 @@ const [showHelp, setShowHelp] = useState(false);
               ) : (
                 <>
                   {statsPage === 0 ? (
-                    <div style={{ width: '90%', margin: '0 auto', height: '675px', display: 'flex', flexDirection: 'column' }}>
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                    <div style={{ width: '90%', margin: '0 auto', height: '780px', display: 'flex', flexDirection: 'column' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -581,7 +582,7 @@ const [showHelp, setShowHelp] = useState(false);
                         </div>
                       </div>
 
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>오늘의 기록</h3>
                         {(() => {
                           const kstNow = getKSTDate();
@@ -610,6 +611,40 @@ const [showHelp, setShowHelp] = useState(false);
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                                 <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3b82f6' }}>{todayDaily.todayPlayCount > 0 ? timeStr : '-'}</span>
                                 <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이한<br />시간</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>멀티플레이 기록</h3>
+                        {(() => {
+                          const mpPlays = userProfile.multiplayerPlays || 0;
+                          const mpWins = userProfile.multiplayerWins || 0;
+                          const winRate = mpPlays > 0 ? ((mpWins / mpPlays) * 100).toFixed(1) : 0;
+                          const mpCompletions = userProfile.multiplayerCompletions || 0;
+                          const completionRate = mpPlays > 0 ? ((mpCompletions / mpPlays) * 100).toFixed(1) : 0;
+                          const mpBestTime = userProfile.multiplayerBestTime;
+                          const timeStr = mpBestTime && mpBestTime !== Infinity ? `${mpBestTime}s` : '-';
+
+                          return (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fbbf24' }}>{mpPlays}</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이<br />횟수</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{winRate}%</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>승률<br />({mpWins}승)</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{timeStr}</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>최고 기록</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3b82f6' }}>{completionRate}%</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>완주율</span>
                               </div>
                             </div>
                           );
@@ -649,7 +684,7 @@ const [showHelp, setShowHelp] = useState(false);
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', height: '675px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', height: '780px', justifyContent: 'center' }}>
                       <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '420px' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>최근 7일 기록</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
@@ -692,7 +727,7 @@ const [showHelp, setShowHelp] = useState(false);
                         </div>
                       </div>
 
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '265px' }}>
                         {(() => {
                           const kstNow = getKSTDate();
                           const todayDow = kstNow.getDay();
@@ -732,9 +767,13 @@ const [showHelp, setShowHelp] = useState(false);
                             if (m !== prevMonth) {
                               if (i !== 0 || d.getDate() <= 7) {
                                 if (colIndex > lastPlacedCol + 1) {
+                                  let labelText = monthNames[m];
+                                  if (m === 0) {
+                                    labelText = `${d.getFullYear().toString().substring(2)}' ${labelText}`;
+                                  }
                                   monthLabels.push(
-                                    <span key={`month-${i}`} style={{ position: 'absolute', left: `${colIndex * 16}px`, fontSize: '0.65rem', color: '#94a3b8', bottom: 0, lineHeight: '14px' }}>
-                                      {monthNames[m]}
+                                    <span key={`month-${i}`} style={{ position: 'absolute', left: `${colIndex * 16}px`, fontSize: '0.65rem', color: '#94a3b8', bottom: 0, lineHeight: '14px', whiteSpace: 'nowrap' }}>
+                                      {labelText}
                                     </span>
                                   );
                                   lastPlacedCol = colIndex;
@@ -747,7 +786,7 @@ const [showHelp, setShowHelp] = useState(false);
                           return (
                             <>
                               <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>잔디 기록</h3>
-                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', flex: 1 }}>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.75rem' }}>
                                 <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: '4px', paddingRight: '0.2rem', paddingTop: '18px' }}>
                                   <span />
                                   <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Mon</span>
@@ -758,7 +797,7 @@ const [showHelp, setShowHelp] = useState(false);
                                   <span />
                                 </div>
                                 <div className="custom-scroll" style={{ overflowX: 'auto', paddingBottom: '0.5rem', direction: 'rtl', flex: 1 }}>
-                                  <div style={{ display: 'flex', flexDirection: 'column', direction: 'ltr', width: 'max-content', paddingBottom: '12px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', direction: 'ltr', width: 'max-content', paddingBottom: '4px' }}>
                                     <div style={{ position: 'relative', height: '14px', marginBottom: '4px' }}>
                                       {monthLabels}
                                     </div>
@@ -767,6 +806,17 @@ const [showHelp, setShowHelp] = useState(false);
                                     </div>
                                   </div>
                                 </div>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.4rem', marginTop: '-0.5rem', fontSize: '0.75rem', color: '#94a3b8' }}>
+                                <span>Less</span>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }} />
+                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#065f46' }} />
+                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#059669' }} />
+                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#10b981' }} />
+                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#34d399', boxShadow: '0 0 6px rgba(52, 211, 153, 0.8)' }} />
+                                </div>
+                                <span>More</span>
                               </div>
                             </>
                           );

@@ -159,8 +159,23 @@ function mulberry32(a) {
     }
 }
 
-export function generateDailyArrows(count = 50) {
-    const seed = getDailySeed();
+export function generateDailyArrows(count = 50, customSeed = null) {
+    let seed;
+    if (customSeed !== null) {
+        if (typeof customSeed === 'string') {
+            let hash = 0;
+            for (let i = 0; i < customSeed.length; i++) {
+                const char = customSeed.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            seed = hash;
+        } else {
+            seed = customSeed;
+        }
+    } else {
+        seed = getDailySeed();
+    }
     const prng = mulberry32(seed);
     const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
     const result = [];

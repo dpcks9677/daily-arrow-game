@@ -1,0 +1,1576 @@
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
+import confetti from 'canvas-confetti'
+import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy, BarChart, AlertCircle } from 'lucide-react'
+import { generateDailyArrows, getByteLength, getDailySeed, generateBackupCode, saveSecureProfile, loadSecureProfile } from './utils'
+import { collection, doc, setDoc, updateDoc, getDocs, getDoc, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore'
+import { db, auth } from './firebase'
+import { signInAnonymously } from 'firebase/auth'
+import './App.css'
+
+export const ACHIEVEMENTS = [
+  { id: 'first_clear', title: '泥?嫄몄쓬', desc: '寃뚯엫??1???꾨즺?섏꽭??' },
+  { id: 'leaderboard_entry', title: '?낆옣??, desc: '由щ뜑蹂대뱶??湲곕줉???щ━?몄슂.' },
+  { id: 'streak_2', title: '??踰덉? ?쎌?', desc: '2???곗냽?쇰줈 寃뚯엫???꾨즺?섏꽭??' },
+  { id: 'streak_3', title: '?묒떖?쇱씪', desc: '3???곗냽?쇰줈 寃뚯엫???꾨즺?섏꽭??' },
+  { id: 'streak_7', title: '蹂댁떆湲곗뿉 ?ы엳 醫뗭븯?붾씪', desc: '?쇱＜???곗냽?쇰줈 寃뚯엫???꾨즺?섏꽭??' },
+  { id: 'top_1', title: 'Veni, vidi, vici', desc: '由щ뜑蹂대뱶?먯꽌 1?깆쓣 湲곕줉?섏꽭?? (5媛??댁긽??湲곕줉???덉쓣 ??' },
+  { id: 'speed_15s', title: '15珥덈뒗 萸?..', desc: '寃뚯엫??15珥??대궡濡??꾨즺?섏꽭??' },
+  { id: 'speed_12s', title: '醫 移섎꽕', desc: '寃뚯엫??12珥??대궡濡??꾨즺?섏꽭??' },
+  { id: 'speed_9_8s', title: '以묐젰媛?띾룄泥섎읆 鍮좊Ⅴ寃?, desc: '寃뚯엫??9.8珥??대궡濡??꾨즺?섏꽭??' },
+  { id: 'flawless', title: '臾닿껐??, desc: '??踰덉쓽 ?ㅼ닔???놁씠 寃뚯엫???꾨즺?섏꽭??' },
+  { id: 'play_5', title: '諛섎났? 湲곕낯?대떎', desc: '?섎（ ?덉뿉 寃뚯엫??5踰??꾨즺?섏꽭??' },
+  { id: 'play_10', title: '?대쾲 李띿뼱 ???섏뼱媛???섎Т ?녿떎', desc: '?섎（ ?덉뿉 寃뚯엫??10踰??꾨즺?섏꽭??' }
+];
+
+const triggerConfetti = () => {
+  const commonOptions = {
+    particleCount: 80,
+    spread: 70,
+    scalar: 1.8, // ?뚰떚???ш린 1.8諛?    colors: ['#ef4444', '#3b82f6', '#facc15'], // 鍮④컯, ?뚮옉, ?몃옉
+    startVelocity: 50
+  };
+
+  // ?쇱そ?먯꽌 ??踰?諛쒖궗 (y: 0.45)
+  confetti({
+    ...commonOptions,
+    angle: 60,
+    origin: { x: 0, y: 0.45 }
+  });
+
+  // ?ㅻⅨ履쎌뿉????踰?諛쒖궗 (y: 0.45)
+  confetti({
+    ...commonOptions,
+    angle: 120,
+    origin: { x: 1, y: 0.45 }
+  });
+};
+
+const getStreakStatus = (userProfile) => {
+  if (!userProfile || !userProfile.lastPlayedDate) {
+    return { isActive: false, streak: 0, isPlayedToday: false };
+  }
+  const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+  const todayStr = kstNow.toISOString().split('T')[0];
+  const today = new Date(todayStr);
+  const last = new Date(userProfile.lastPlayedDate);
+  const diffDaysStr = Math.round((today - last) / (1000 * 60 * 60 * 24));
+  
+  const isPlayedToday = diffDaysStr === 0;
+
+  if (diffDaysStr <= 1) {
+    return { isActive: true, streak: userProfile.currentStreak || 0, isPlayedToday };
+  } else {
+    return { isActive: false, streak: 0, isPlayedToday: false };
+  }
+};
+
+function AchievementPopupContainer({ popups, setPopups }) {
+  const [dismissed, setDismissed] = useState([]);
+  const [summaryDismissed, setSummaryDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!popups || popups.length === 0) {
+      setDismissed([]);
+      setSummaryDismissed(false);
+    }
+  }, [popups]);
+
+  if (!popups || popups.length === 0) return null;
+
+  const initialDisplay = popups.length > 3 ? popups.slice(0, 2) : popups;
+  const remainingCount = popups.length > 3 ? popups.length - 2 : 0;
+
+  const displayPopups = initialDisplay.filter(id => !dismissed.includes(id));
+  const showSummary = remainingCount > 0 && !summaryDismissed;
+
+  const handleClose = (id) => {
+    setDismissed(prev => {
+      const next = [...prev, id];
+      if (initialDisplay.filter(x => !next.includes(x)).length === 0 && !showSummary) {
+        setTimeout(() => setPopups([]), 0);
+      }
+      return next;
+    });
+  };
+
+  const handleCloseSummary = () => {
+    setSummaryDismissed(true);
+    if (displayPopups.length === 0) {
+      setTimeout(() => setPopups([]), 0);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 10000, display: 'flex', flexDirection: 'column', gap: '0.8rem', pointerEvents: 'none' }}>
+      {displayPopups.map((achId) => {
+        const ach = ACHIEVEMENTS.find(a => a.id === achId);
+        if (!ach) return null;
+        return (
+          <div key={ach.id} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(30, 58, 138, 0.95)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
+            <button onClick={() => handleClose(ach.id)} style={{ position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>??/button>
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid rgba(245, 158, 11, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+              <Trophy size={20} color="#f59e0b" />
+            </div>
+            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <p style={{ margin: 0, fontWeight: 'bold', fontSize: '0.85rem', color: '#f59e0b' }}>?꾩쟾怨쇱젣 ?ъ꽦!</p>
+              <p style={{ margin: 0, fontSize: '0.95rem', color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{ach.title}</p>
+            </div>
+          </div>
+        );
+      })}
+      {showSummary && (
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(30, 58, 138, 0.95)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
+          <button onClick={handleCloseSummary} style={{ position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>??/button>
+          <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid rgba(245, 158, 11, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+            <Trophy size={20} color="#f59e0b" />
+          </div>
+          <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.2rem', justifyContent: 'center', height: '100%' }}>
+            <p style={{ margin: 0, fontWeight: 'bold', fontSize: '0.95rem', color: '#f59e0b' }}>+{remainingCount}媛쒖쓽 ?꾩쟾怨쇱젣 ?ъ꽦!</p>
+          </div>
+        </div>
+      )}
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function App() {
+  const [currentScreen, setCurrentScreen] = useState('start') // 'start', 'game', 'leaderboard'
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('arrow_game_theme');
+    if (saved !== null) return saved === 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  const [userProfile, setUserProfile] = useState(null);
+  const [unlockedPopups, setUnlockedPopups] = useState([]);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  useEffect(() => {
+    if (currentScreen === 'start') {
+      setUnlockedPopups([]);
+    }
+  }, [currentScreen]);
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.remove('light-mode');
+    } else {
+      document.body.classList.add('light-mode');
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      if (localStorage.getItem('arrow_game_theme') === null) {
+        setIsDarkMode(e.matches);
+      }
+    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, []);
+
+  useEffect(() => {
+    const initUser = async () => {
+      try {
+        const userCredential = await signInAnonymously(auth);
+        const deviceId = userCredential.user.uid;
+        
+        const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+        const todayStr = kstNow.toISOString().split('T')[0];
+
+        const localData = loadSecureProfile();
+        const userRef = doc(db, 'users', deviceId);
+
+        if (localData && localData.backupCode) {
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            const merged = { totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data, id: deviceId };
+            setUserProfile(merged);
+            saveSecureProfile(merged);
+          } else {
+            setUserProfile({ ...localData, id: deviceId });
+          }
+        } else if (localData) {
+          setUserProfile({ ...localData, id: deviceId });
+        } else {
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            const merged = { totalPlayCount: data.totalPlayCount || 0, totalLongestStreak: data.totalLongestStreak || data.currentStreak || 0, gameStartDate: data.gameStartDate || todayStr, totalBestRecords: data.totalBestRecords || [], totalPlayTime: data.totalPlayTime || 0, totalMistakes: data.totalMistakes || 0, totalPerfectClear: data.totalPerfectClear || 0, ...data, id: deviceId };
+            setUserProfile(merged);
+            saveSecureProfile(merged);
+          } else {
+            const newProfile = {
+              id: deviceId,
+              backupCode: null,
+              nickname: localStorage.getItem('arrow_game_nickname') || '',
+              currentStreak: 0,
+              lastPlayedDate: '',
+              achievements: [],
+              totalPlayCount: 0,
+              totalLongestStreak: 0,
+              gameStartDate: todayStr,
+              totalBestRecords: [],
+              totalPlayTime: 0,
+              totalMistakes: 0,
+              totalPerfectClear: 0
+            };
+            setUserProfile({ ...newProfile, isNew: true });
+            saveSecureProfile({ ...newProfile, isNew: true });
+          }
+        }
+      } catch (error) {
+        console.error("Anonymous auth failed:", error);
+        alert("?몄쬆???ㅽ뙣?덉뒿?덈떎. ?뚯씠?대쿋?댁뒪 肄섏넄?먯꽌 ?듬챸 濡쒓렇?몄쓣 ?쒖꽦?뷀빐二쇱꽭??");
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+    initUser();
+  }, []);
+
+
+  const saveProfile = async (currentProfile, updates) => {
+    const newProfile = { ...currentProfile, ...updates };
+    setUserProfile(newProfile);
+    saveSecureProfile(newProfile);
+    if (newProfile.backupCode) {
+      setDoc(doc(db, 'users', newProfile.id), updates, { merge: true }).catch(e => console.error("DB Sync error:", e));
+    }
+  };
+
+  const toggleTheme = () => {
+    setIsDarkMode(prev => {
+      const nextTheme = !prev;
+      localStorage.setItem('arrow_game_theme', nextTheme ? 'dark' : 'light');
+      return nextTheme;
+    });
+  };
+
+  if (isAuthLoading) {
+    return <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#f8fafc' }}><h3>?쒕쾭 ?곌껐 以?..</h3></div>;
+  }
+
+  const handlePlay = async () => {
+    if (userProfile) {
+      const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+      const todayStr = kstNow.toISOString().split('T')[0];
+      const dailyRecs = userProfile.dailyRecords || {};
+      const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0, todayTrials: 0 };
+      
+      const newDailyRecords = {
+        ...dailyRecs,
+        [todayStr]: {
+          ...todayDaily,
+          todayTrials: (todayDaily.todayTrials || 0) + 1
+        }
+      };
+
+      saveProfile(userProfile, {
+        totalTrials: (userProfile.totalTrials || 0) + 1,
+        dailyRecords: newDailyRecords
+      });
+    }
+    setCurrentScreen('game');
+  };
+
+  return (
+    <div className="app-container">
+      {unlockedPopups.length > 0 && (
+        <AchievementPopupContainer popups={unlockedPopups} setPopups={setUnlockedPopups} />
+      )}
+      {currentScreen === 'start' && <StartScreen onPlay={handlePlay} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
+    </div>
+  )
+}
+
+function StartScreen({ onPlay, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
+
+const [showHelp, setShowHelp] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
+  const [statsPage, setStatsPage] = useState(0);
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
+  const [recoverCode, setRecoverCode] = useState('');
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [isEditingNickname, setIsEditingNickname] = useState(false);
+  const [editNicknameValue, setEditNicknameValue] = useState('');
+  const [debugTime, setDebugTime] = useState(9.5);
+  const [debugMistakes, setDebugMistakes] = useState(0);
+  const [nicknameError, setNicknameError] = useState('');
+
+  const handleRecoverCodeChange = (e) => {
+    let val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (val.length > 4) {
+      val = val.slice(0, 4) + '-' + val.slice(4, 8);
+    }
+    setRecoverCode(val.slice(0, 9));
+  };
+
+  useEffect(() => {
+    if (showProfile && userProfile) {
+      if (!userProfile.nickname) {
+        setIsEditingNickname(true);
+      } else {
+        setIsEditingNickname(false);
+      }
+      setEditNicknameValue(userProfile.nickname || '');
+      setNicknameError('');
+    }
+  }, [showProfile, userProfile]);
+
+  const handleEditNicknameChange = (e) => {
+    const val = e.target.value;
+    setEditNicknameValue(val);
+    
+    const isValidChar = /^[媛-?ｃ꽦-?롢뀖-?즑-zA-Z0-9_. ]*$/.test(val);
+    if (getByteLength(val) > 20) {
+      setNicknameError("?쒓?? 8湲?먭퉴吏, ?곸뼱??20?먭퉴吏 媛?ν빀?덈떎");
+    } else if (!isValidChar) {
+      setNicknameError("?뱀닔臾몄옄(?몃뜑諛?諛?留덉묠???쒖쇅) 諛??꾩씠肄섏? ?ъ슜?????놁뒿?덈떎.");
+    } else {
+      setNicknameError('');
+    }
+  };
+
+  const handleSaveNickname = async () => {
+    const trimmed = editNicknameValue.trim();
+    if (!trimmed) {
+      setNicknameError("怨듬갚?쇰줈 ?ㅼ젙?????놁뒿?덈떎.");
+      return;
+    }
+    const isValidChar = /^[媛-?ｃ꽦-?롢뀖-?즑-zA-Z0-9_. ]+$/.test(trimmed);
+    if (!isValidChar) {
+      setNicknameError("?뱀닔臾몄옄(?몃뜑諛?諛?留덉묠???쒖쇅) 諛??꾩씠肄섏? ?ъ슜?????놁뒿?덈떎.");
+      return;
+    }
+    if (getByteLength(trimmed) > 20) {
+      setNicknameError("?쒓?? 8湲?먭퉴吏, ?곸뼱??20?먭퉴吏 媛?ν빀?덈떎");
+      return;
+    }
+    try {
+      const deviceId = userProfile.id;
+      await saveProfile(userProfile, { nickname: trimmed });
+      localStorage.setItem('arrow_game_nickname', trimmed);
+      setIsEditingNickname(false);
+      setNicknameError('');
+    } catch (e) {
+      console.error(e);
+      alert("?됰꽕????μ뿉 ?ㅽ뙣?덉뒿?덈떎.");
+    }
+  };
+
+  const handleIssueBackupCode = async () => {
+    try {
+      let newCode;
+      let isUnique = false;
+      const usersRef = collection(db, 'users');
+      
+      while (!isUnique) {
+        newCode = generateBackupCode();
+        const q = query(usersRef, where('backupCode', '==', newCode));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+          isUnique = true;
+        }
+      }
+
+      const deviceId = userProfile.id;
+      const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+      const issuedDateStr = kstNow.toISOString().split('T')[0];
+      
+      // 諛깆뾽 肄붾뱶瑜?諛쒓툒諛쏅뒗 ?좎???怨꾩냽 ?뚮젅?댄븷 吏꾩꽦 ?좎????뺣쪧???믪쑝誘濡?
+      // ?곗씠?곕쿋?댁뒪 援ъ“???쇨??깆쓣 ?꾪빐 ?섎㉧吏 湲곕낯 ?붿냼?ㅻ룄 ?④퍡 ?앹꽦?댁쨳?덈떎.
+      const fullProfile = {
+        id: deviceId,
+        backupCode: newCode,
+        backupCodeIssuedAt: issuedDateStr,
+        nickname: userProfile?.nickname || '',
+        currentStreak: userProfile?.currentStreak || 0,
+        lastPlayedDate: userProfile?.lastPlayedDate || '',
+        achievements: userProfile?.achievements || [],
+        totalPlayCount: userProfile?.totalPlayCount || 0,
+        totalLongestStreak: userProfile?.totalLongestStreak || userProfile?.currentStreak || 0,
+        gameStartDate: userProfile?.gameStartDate || issuedDateStr,
+        totalBestRecords: userProfile?.totalBestRecords || [],
+        totalPlayTime: userProfile?.totalPlayTime || 0,
+        totalMistakes: userProfile?.totalMistakes || 0,
+        totalPerfectClear: userProfile?.totalPerfectClear || 0,
+        createdAt: serverTimestamp() // 理쒖큹 ?깅줉 ?쒓컙 湲곕줉
+      };
+
+      await setDoc(doc(db, 'users', deviceId), fullProfile, { merge: true });
+      setUserProfile(fullProfile);
+      saveSecureProfile(fullProfile);
+    } catch (e) {
+      console.error(e);
+      alert("諛깆뾽 肄붾뱶 諛쒓툒???ㅽ뙣?덉뒿?덈떎.");
+    }
+  };
+
+  const handleRecover = async () => {
+    if (!recoverCode.trim()) return alert("諛깆뾽 肄붾뱶瑜??낅젰?댁＜?몄슂.");
+    setIsRecovering(true);
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('backupCode', '==', recoverCode.trim().toUpperCase()));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        alert("?쇱튂?섎뒗 怨꾩젙??李얠쓣 ???놁뒿?덈떎. 肄붾뱶瑜??뺤씤?댁＜?몄슂.");
+      } else {
+        const matchedDoc = querySnapshot.docs[0];
+        const oldData = matchedDoc.data();
+        
+        const deviceId = userProfile.id;
+        // ?꾩옱 ?몄쬆????怨꾩젙(deviceId) ??뼱?곌린 (湲곗〈 ?뚯뒪???곗씠?곌? ?욎씠吏 ?딅룄濡??꾩쟾????뼱?뚯?)
+        await setDoc(doc(db, 'users', deviceId), oldData);
+        
+        const newProfile = { ...oldData, id: deviceId };
+        setUserProfile(newProfile);
+        saveSecureProfile(newProfile);
+        alert("怨꾩젙 ?곗씠?곌? ?깃났?곸쑝濡?蹂듦뎄?섏뿀?듬땲??");
+        setShowProfile(false);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("蹂듦뎄 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+    } finally {
+      setIsRecovering(false);
+    }
+  };
+
+  const { isActive, streak, isPlayedToday } = getStreakStatus(userProfile);
+
+  return (
+    <div className="start-screen">
+<div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'default' }}>
+          <Flame size={32} color={isPlayedToday ? '#ef4444' : '#64748b'} fill={isPlayedToday ? '#f97316' : 'transparent'} className={isPlayedToday ? 'flame-burning' : ''} />
+          <span style={{ fontWeight: 900, fontSize: '1.4rem', color: isPlayedToday ? '#f97316' : '#64748b', letterSpacing: '-1px' }}>
+            {isActive ? `DAY ${streak}` : 'NO STREAK'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {!userProfile?.backupCode ? (
+            <div className="custom-tooltip-wrapper">
+              <button 
+                className="icon-btn"
+                style={{ 
+                  width: '40px', height: '40px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  color: '#475569', 
+                  cursor: 'default', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  opacity: 0.4
+                }}
+              >
+                <Trophy size={24} />
+              </button>
+              <span className="custom-tooltip">?꾨줈?꾩쓣 ?앹꽦?섍퀬 ?꾩쟾怨쇱젣 ?쒖뒪?쒖쓣 ?쒖꽦???섏꽭??</span>
+            </div>
+          ) : (
+            <div className="custom-tooltip-wrapper">
+              <button 
+                className="icon-btn"
+                onClick={() => setShowAchievements(true)}
+                style={{ 
+                  width: '40px', height: '40px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  color: '#cbd5e1', 
+                  cursor: 'pointer', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  opacity: 1
+                }}
+              >
+                <Trophy size={24} />
+              </button>
+              <span className="custom-tooltip">?꾩쟾怨쇱젣</span>
+            </div>
+          )}
+
+          {!userProfile?.backupCode ? (
+            <div className="custom-tooltip-wrapper">
+              <button 
+                className="icon-btn"
+                style={{ 
+                  width: '40px', height: '40px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  color: '#475569', 
+                  cursor: 'default', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  opacity: 0.4
+                }}
+              >
+                <BarChart size={24} />
+              </button>
+              <span className="custom-tooltip">?꾨줈?꾩쓣 ?앹꽦?섍퀬 ?듦퀎 ?쒖뒪?쒖쓣 ?쒖꽦???섏꽭??</span>
+            </div>
+          ) : (
+            <div className="custom-tooltip-wrapper">
+              <button 
+                className="icon-btn"
+                onClick={() => setShowStatistics(true)}
+                style={{ 
+                  width: '40px', height: '40px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  color: '#cbd5e1', 
+                  cursor: 'pointer', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  opacity: 1
+                }}
+              >
+                <BarChart size={24} />
+              </button>
+              <span className="custom-tooltip">?듦퀎</span>
+            </div>
+          )}
+          <div className="custom-tooltip-wrapper">
+            <button 
+              className="icon-btn"
+              onClick={() => setShowProfile(true)}
+              style={{ position: 'relative', width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <User size={24} />
+              {(!userProfile?.backupCode && userProfile) && (
+                <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#1e293b', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px' }}>
+                  <AlertCircle size={16} color="#fbbf24" fill="#1e293b" />
+                </div>
+              )}
+            </button>
+            <span className="custom-tooltip">???꾨줈??/span>
+          </div>
+          
+          <div className="custom-tooltip-wrapper">
+            <button 
+              className="icon-btn"
+              onClick={toggleTheme}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+            </button>
+            <span className="custom-tooltip">{isDarkMode ? '?쇱씠???뚮쭏' : '?ㅽ겕 ?뚮쭏'}</span>
+          </div>
+          
+          <div className="custom-tooltip-wrapper">
+            <button 
+              className="icon-btn"
+              onClick={() => setShowHelp(true)}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <HelpCircle size={24} />
+            </button>
+            <span className="custom-tooltip">寃뚯엫 ?꾩?留?/span>
+          </div>
+        </div>
+      </div>
+      <h1 style={{ marginTop: '60px' }}>
+        Daily Arrow
+      </h1>
+      <p className="subtitle">50媛쒖쓽 諛⑺뼢?ㅻ? 媛??鍮좊Ⅴ寃??낅젰?섏꽭?? (留ㅼ씪 ?먯젙 媛깆떊)</p>
+      
+      <div className="button-group">
+        <button className="primary-btn" onClick={onPlay}>Play</button>
+        <button className="secondary-btn" onClick={onLeaderboard}>Leaderboard</button>
+      </div>
+
+      {showHelp && (
+        <div className="modal-overlay" onClick={() => setShowHelp(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+              <button className="close-btn" onClick={() => setShowHelp(false)}>??/button>
+              <h2 style={{ fontSize: '1.87rem' }}>寃뚯엫 ?꾩?留?/h2>
+              <div className="modal-info-box" style={{ textAlign: 'left', color: '#cbd5e1', lineHeight: '1.7', marginTop: '1.5rem', fontSize: '0.85rem', background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                <ul style={{ paddingLeft: '1.2rem', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <li>?ㅻ낫?쒖쓽 諛⑺뼢???? ?? ?? ??瑜??ъ슜?섏뿬 ?붾㈃???붿궡?쒕? ?묎컳???낅젰?섏꽭??</li>
+                  <li>諛⑺뼢?ㅻ? ?섎せ ?꾨Ⅴ硫?0.5珥??숈븞 ?낅젰?????녾쾶 ?⑸땲??</li>
+                  <li>留ㅼ씪 ?먯젙留덈떎 ?붿궡???명듃媛 諛붾앸땲??</li>
+                  <li>?ㅼ닔 ?놁씠 媛??鍮좊Ⅴ寃??대━?댄븯????궧???꾩쟾??蹂댁꽭??</li>
+                </ul>
+              </div>
+            </div>
+        </div>
+      )}
+
+
+
+      {import.meta.env.DEV && (
+        <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', background: 'rgba(0,0,0,0.8)', padding: '1rem', borderRadius: '8px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px' }}>
+          <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
+          <button onClick={async () => {
+             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalLongestStreak: 0, totalBestRecords: [], totalPlayTime: 0, totalMistakes: 0, totalPerfectClear: 0, dailyRecords: {} };
+             await saveProfile(userProfile, resetData);
+          }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+            紐⑤뱺 ?곗씠??珥덇린??          </button>
+          
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button onClick={async () => {
+               const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+               const todayStr = kstNow.toISOString().split('T')[0];
+               const timeSec = Number(debugTime); 
+               const mistakes = Number(debugMistakes); 
+               let newTodayCount = 1;
+               if (userProfile?.todayClearDate === todayStr) {
+                 newTodayCount = (userProfile?.todayClearCount || 0) + 1;
+               }
+               let newStreak = 1;
+               if (userProfile?.lastPlayedDate) {
+                 const today = new Date(todayStr);
+                 const last = new Date(userProfile.lastPlayedDate);
+                 const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
+                 if (diffDays === 0) {
+                   newStreak = userProfile.currentStreak || 0;
+                 } else if (diffDays === 1) {
+                   newStreak = (userProfile.currentStreak || 0) + 1;
+                 }
+               }
+
+               const newUnlocked = [];
+               if (timeSec <= 15) newUnlocked.push('speed_15s');
+               if (timeSec <= 12) newUnlocked.push('speed_12s');
+               if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
+               if (mistakes === 0) newUnlocked.push('flawless');
+               if (newTodayCount >= 5) newUnlocked.push('play_5');
+               if (newTodayCount >= 10) newUnlocked.push('play_10');
+               newUnlocked.push('first_clear');
+
+               if (newStreak >= 2) newUnlocked.push('streak_2');
+               if (newStreak >= 3) newUnlocked.push('streak_3');
+               if (newStreak >= 7) newUnlocked.push('streak_7');
+
+               const currentAchievements = userProfile?.achievements || [];
+               const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+               const updatedAchievements = [...currentAchievements, ...actualNew];
+
+               const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
+               const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
+
+               const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+               const newTotalBestRecords = [...(userProfile?.totalBestRecords || userProfile?.bestRecords || []), currentRecord]
+                 .sort((a, b) => {
+                   if (a.time !== b.time) return a.time - b.time;
+                   return a.mistakes - b.mistakes;
+                 }).slice(0, 3);
+
+               const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+               const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+               const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
+
+               const dailyRecs = userProfile?.dailyRecords || {};
+               const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
+               const newDailyRecords = {
+                 ...dailyRecs,
+                 [todayStr]: {
+                   todayPlayCount: todayDaily.todayPlayCount + 1,
+                   todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+                   todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+                   todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+                   todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
+                 }
+               };
+
+               const updates = { 
+                 todayClearDate: todayStr, 
+                 todayClearCount: newTodayCount, 
+                 achievements: updatedAchievements,
+                 totalPlayCount: newTotalPlayCount,
+                 currentStreak: newStreak,
+                 lastPlayedDate: todayStr,
+                 totalLongestStreak: newTotalLongestStreak,
+                 totalBestRecords: newTotalBestRecords,
+                 totalPlayTime: newTotalPlayTime,
+                 totalMistakes: newTotalMistakes,
+                 totalPerfectClear: newTotalPerfectClear,
+                 dailyRecords: newDailyRecords
+               };
+               await saveProfile(userProfile, updates);
+               if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
+            }} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', flex: 1, whiteSpace: 'nowrap' }}>
+              寃뚯엫 ?꾨즺 ?몃━嫄?            </button>
+            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', color: '#cbd5e1' }}>
+              <input type="number" step="0.1" value={debugTime} onChange={e => setDebugTime(e.target.value)} style={{ width: '40px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center' }} title="湲곕줉(珥?" />珥?              <input type="number" value={debugMistakes} onChange={e => setDebugMistakes(e.target.value)} style={{ width: '30px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center', marginLeft: '0.25rem' }} title="?ㅼ닔 ?잛닔" />??            </div>
+          </div>
+
+          <button onClick={async () => {
+             const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+             const todayStr = kstNow.toISOString().split('T')[0];
+             let newStreak = (userProfile?.currentStreak || 1) + 1;
+             
+             const newUnlocked = ['leaderboard_entry'];
+             if (newStreak >= 2) newUnlocked.push('streak_2');
+             if (newStreak >= 3) newUnlocked.push('streak_3');
+             if (newStreak >= 7) newUnlocked.push('streak_7');
+
+             const currentAchievements = userProfile?.achievements || [];
+             const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+             const updatedAchievements = [...currentAchievements, ...actualNew];
+
+             const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
+
+             const timeSec = Number(debugTime) || 10;
+             const mistakes = Number(debugMistakes) || 0;
+             const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+             const newTotalBestRecords = [...(userProfile?.totalBestRecords || userProfile?.bestRecords || []), currentRecord]
+               .sort((a, b) => {
+                 if (a.time !== b.time) return a.time - b.time;
+                 return a.mistakes - b.mistakes;
+               }).slice(0, 3);
+               
+             const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+             const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+             const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
+
+             const dailyRecs = userProfile?.dailyRecords || {};
+             const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
+             const newDailyRecords = {
+               ...dailyRecs,
+               [todayStr]: {
+                 todayPlayCount: todayDaily.todayPlayCount + 1,
+                 todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+                 todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+                 todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+                 todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
+               }
+             };
+
+             const updates = { 
+               currentStreak: newStreak, 
+               lastPlayedDate: todayStr, 
+               achievements: updatedAchievements, 
+               totalLongestStreak: newTotalLongestStreak, 
+               totalBestRecords: newTotalBestRecords,
+               totalPlayTime: newTotalPlayTime,
+               totalMistakes: newTotalMistakes,
+               totalPerfectClear: newTotalPerfectClear,
+               dailyRecords: newDailyRecords,
+               totalPlayCount: (userProfile?.totalPlayCount || 0) + 1
+             };
+             await saveProfile(userProfile, updates);
+             if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
+          }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
+            ?먯닔 ?깅줉 ?몃━嫄?(?ㅽ듃由?+1 媛뺤젣 諛섏쁺)
+          </button>
+        </div>
+      )}
+
+      {showAchievements && (
+        <div className="modal-overlay" onClick={() => setShowAchievements(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+              <button className="close-btn" onClick={() => setShowAchievements(false)}>??/button>
+              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>?꾩쟾怨쇱젣</h2>
+              
+              <div className="modal-info-box" style={{ 
+                background: 'rgba(30, 58, 138, 0.3)', 
+                padding: '1.5rem', 
+                borderRadius: '12px', 
+                border: '1px solid rgba(59, 130, 246, 0.2)', 
+                marginBottom: '1.5rem',
+                height: '316px', // ?꾩씠???믪씠 ??82px * 3媛?+ gap 16px * 2 + padding = ??316px (3媛??뚮뜑留???理쒖쟻)
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem'
+              }}>
+                {ACHIEVEMENTS.map(ach => {
+                  const isUnlocked = userProfile?.achievements?.includes(ach.id);
+                  const iconColor = isUnlocked ? '#f59e0b' : '#94a3b8';
+                  const bg = isUnlocked ? 'rgba(245, 158, 11, 0.2)' : 'rgba(148, 163, 184, 0.2)';
+                  const border = isUnlocked ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(148, 163, 184, 0.5)';
+                  const titleColor = isUnlocked ? '#f8fafc' : '#94a3b8';
+                  const descColor = isUnlocked ? '#94a3b8' : '#64748b';
+
+                  return (
+                    <div key={ach.id} className="inner-box" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', flexShrink: 0 }}>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: bg, border: border, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                        <Trophy size={24} color={iconColor} />
+                      </div>
+                      <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        <p className="ach-title" style={{ margin: 0, fontWeight: 'bold', fontSize: '1rem', color: titleColor }}>{ach.title}</p>
+                        <p className="ach-desc" style={{ margin: 0, fontSize: '0.8rem', color: descColor }}>{ach.desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+        </div>
+      )}
+
+      {showStatistics && (
+        <div className="modal-overlay" onClick={() => setShowStatistics(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '510px', width: '95%', position: 'relative' }}>
+              <button className="close-btn" onClick={() => setShowStatistics(false)}>??/button>
+
+              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>{statsPage === 0 ? '?듦퀎' : '?좎쭨 蹂?湲곕줉'}</h2>
+
+              {/* Pagination Arrows */}
+              {statsPage > 0 && (
+                <button onClick={() => setStatsPage(p => p - 1)} style={{ position: 'absolute', left: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                  <LucideLeft size={24} />
+                </button>
+              )}
+              {statsPage < 1 && (
+                <button onClick={() => setStatsPage(p => p + 1)} style={{ position: 'absolute', right: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                  <LucideRight size={24} />
+                </button>
+              )}
+              
+              {!userProfile ? (
+                <p>濡쒕뵫 以?..</p>
+              ) : (
+                <>
+                  {statsPage === 0 ? (
+                    <div style={{ width: '90%', margin: '0 auto', height: '675px', display: 'flex', flexDirection: 'column' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>二쇱슂 ?듦퀎 ?붿빟</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.totalPlayCount || 0}</span>
+                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>?꾨즺??寃뚯엫 ??/span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                              <Flame size={20} color={(userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{userProfile.totalLongestStreak || userProfile.currentStreak || 0}</span>
+                            </div>
+                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>理쒖옣 ?ㅽ듃由?/span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginTop: '0.3rem' }}>{(userProfile.backupCodeIssuedAt || userProfile.gameStartDate) ? (userProfile.backupCodeIssuedAt || userProfile.gameStartDate).substring(2).replace(/-/g, '.') : 'N/A'}</span>
+                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>媛?낆씪</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>?ㅻ뒛??湲곕줉</h3>
+                        {(() => {
+                          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                          const todayStr = kstNow.toISOString().split('T')[0];
+                          const dailyRecs = userProfile.dailyRecords || {};
+                          const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayMistakes: 0, todayPlayTime: 0, todayTrials: 0 };
+                          
+                          const avgMistakes = todayDaily.todayPlayCount > 0 ? (todayDaily.todayMistakes / todayDaily.todayPlayCount).toFixed(1) : 0;
+                          const totalTimeSec = todayDaily.todayPlayTime || 0;
+                          const mins = Math.floor(totalTimeSec / 60);
+                          const secs = Math.floor(totalTimeSec % 60);
+                          const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+                          return (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fbbf24' }}>{todayDaily.todayTrials || 0}</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>?쒕룄??br />寃뚯엫 ??/span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{todayDaily.todayPlayCount}</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>?꾨즺??br />寃뚯엫 ??/span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{avgMistakes}</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>?由??잛닔 ?됯퇏</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', justifyContent: 'center' }}>
+                                <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#3b82f6', marginTop: '0.3rem' }}>{todayDaily.todayPlayCount > 0 ? timeStr : '-'}</span>
+                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>?뚮젅?댄???/span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>??? 理쒓퀬 湲곕줉 Top 3</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', margin: 'auto 0' }}>
+                          {[0, 1, 2].map((idx) => {
+                            const record = userProfile.totalBestRecords ? userProfile.totalBestRecords[idx] : null;
+                            return (
+                              <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                  <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['?쪍', '?쪎', '?쪏'][idx]}</span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                    {record ? (
+                                      <>
+                                        <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
+                                        <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
+                                          {record.mistakes === 0 ? '?ㅼ닔 ?놁쓬' : `?ㅼ닔 ${record.mistakes}??}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#94a3b8' }}>湲곕줉 ?놁쓬</span>
+                                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>-</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className="stat-date" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record ? record.date : '-'}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', height: '675px' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '420px' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>理쒓렐 7??湲곕줉</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                          {(() => {
+                            const dailyRecs = userProfile.dailyRecords || {};
+                            const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                            const list = [];
+                            for(let i=0; i<7; i++) {
+                              const d = new Date(kstNow.getTime() - i * 24 * 60 * 60 * 1000);
+                              const dateStr = d.toISOString().split('T')[0];
+                              const rec = dailyRecs[dateStr];
+                              if (rec) {
+                                list.push({ dateStr, rec });
+                              }
+                            }
+                            if (list.length === 0) return <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0.5rem 0' }}>理쒓렐 7?쇨컙??湲곕줉???놁뒿?덈떎.</p>;
+                            
+                            const header = (
+                              <div key="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.2rem 0.4rem 0.2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '0.2rem' }}>
+                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold' }}>?좎쭨</span>
+                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>?뚮젅???잛닔</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>理쒓퀬 湲곕줉</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>?ㅼ닔</span>
+                                </div>
+                              </div>
+                            );
+
+                            return [header, ...list.map((item, idx) => (
+                              <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
+                                <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-','.')}</span>
+                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayPlayCount || 0}??/span>
+                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
+                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayBestMistakes === 0 ? '0?? : `${item.rec.todayBestMistakes}??}</span>
+                                </div>
+                              </div>
+                            ))];
+                          })()}
+                        </div>
+                      </div>
+
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
+                        {(() => {
+                          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                          const todayDow = kstNow.getDay();
+                          const N_WEEKS = 26; // Half a year
+                          const totalDays = N_WEEKS * 7 + (todayDow + 1);
+
+                          const dailyRecs = userProfile.dailyRecords || {};
+
+                          const getGrassStyle = (count) => {
+                            if (!count || count === 0) return { backgroundColor: 'rgba(255, 255, 255, 0.05)' };
+                            if (count <= 2) return { backgroundColor: '#065f46' }; // ?대몢??珥덈줉
+                            if (count <= 5) return { backgroundColor: '#059669' }; // 以묎컙 珥덈줉
+                            if (count <= 9) return { backgroundColor: '#10b981' }; // 諛앹? ?먮찓?꾨뱶
+                            return { backgroundColor: '#34d399', boxShadow: '0 0 6px rgba(52, 211, 153, 0.8)' }; // ?뺢킅 ?ㅼ삩 洹몃┛ + 鍮쏅컮??                          };
+
+                          const cells = [];
+                          for (let i = 0; i < totalDays; i++) {
+                            const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
+                            const dateStr = d.toISOString().split('T')[0];
+                            const count = dailyRecs[dateStr]?.todayPlayCount || 0;
+                            const customStyle = getGrassStyle(count);
+                            const tooltip = `${dateStr} : ${count}??;
+                            cells.push(
+                              <div key={dateStr} title={tooltip} style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', ...customStyle }} />
+                            );
+                          }
+
+                          const monthLabels = [];
+                          let lastPlacedCol = -1;
+                          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                          let prevMonth = -1;
+                          for (let i = 0; i < totalDays; i++) {
+                            const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
+                            const m = d.getMonth();
+                            const colIndex = Math.floor(i / 7);
+                            if (m !== prevMonth) {
+                              if (i !== 0 || d.getDate() <= 7) {
+                                if (colIndex > lastPlacedCol + 1) {
+                                  monthLabels.push(
+                                    <span key={`month-${i}`} style={{ position: 'absolute', left: `${colIndex * 16}px`, fontSize: '0.65rem', color: '#94a3b8', bottom: 0, lineHeight: '14px' }}>
+                                      {monthNames[m]}
+                                    </span>
+                                  );
+                                  lastPlacedCol = colIndex;
+                                }
+                              }
+                              prevMonth = m;
+                            }
+                          }
+
+                          return (
+                            <>
+                              <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>?붾뵒 湲곕줉</h3>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', flex: 1 }}>
+                                <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: '4px', paddingRight: '0.2rem', paddingTop: '18px' }}>
+                                  <span />
+                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Mon</span>
+                                  <span />
+                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Wed</span>
+                                  <span />
+                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Fri</span>
+                                  <span />
+                                </div>
+                                <div className="custom-scroll" style={{ overflowX: 'auto', paddingBottom: '0.5rem', direction: 'rtl', flex: 1 }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', direction: 'ltr', width: 'max-content', paddingBottom: '12px' }}>
+                                    <div style={{ position: 'relative', height: '14px', marginBottom: '4px' }}>
+                                      {monthLabels}
+                                    </div>
+                                    <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(7, 12px)', gap: '4px' }}>
+                                      {cells}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+        </div>
+      )}
+
+      {showProfile && (
+        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+              <button className="close-btn" onClick={() => setShowProfile(false)}>??/button>
+              <h2 style={{ fontSize: '1.87rem', marginBottom: '0.5rem' }}>???꾨줈??/h2>
+              
+              {!userProfile ? (
+                <p>濡쒕뵫 以?..</p>
+              ) : (
+                <>
+                  <div style={{ position: 'relative', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <p className="modal-section-label" style={{ fontSize: '0.9rem', margin: 0 }}>????됰꽕??/p>
+                      {!isEditingNickname ? (
+                        <button onClick={() => setIsEditingNickname(true)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }} title="?됰꽕???섏젙">
+                          <Pencil size={14} />
+                        </button>
+                      ) : (
+                        <button onClick={handleSaveNickname} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: 0, display: 'flex' }} title="???>
+                          <Pencil size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '240px' }}>
+                        <input 
+                          type="text" 
+                          value={isEditingNickname ? editNicknameValue : userProfile.nickname} 
+                          onChange={handleEditNicknameChange} 
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNickname(); }}
+                          placeholder="?쒓? 8?? ?곷Ц 20???댁쇅"
+                          className="nickname-input profile-nickname-text"
+                          readOnly={!isEditingNickname}
+                          style={{ 
+                            flex: 1, 
+                            minWidth: 0, 
+                            padding: '0.4rem 0.6rem', 
+                            fontSize: '0.9rem', 
+                            textAlign: 'center',
+                            outline: 'none',
+                            width: '100%',
+                            cursor: isEditingNickname ? 'text' : 'default',
+                            opacity: isEditingNickname ? 1 : 0.85
+                          }}
+                        />
+                      </div>
+                      <p style={{ position: 'absolute', bottom: '-1.3rem', color: '#ef4444', fontSize: '0.75rem', margin: 0, visibility: nicknameError ? 'visible' : 'hidden', width: '100%', textAlign: 'center' }}>
+                        {nicknameError || "?덈궡 硫섑듃 ?곸뿭"}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="modal-info-box" style={{ textAlign: 'center', background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem' }}>
+                    <p style={{ fontSize: '0.9rem', color: '#cbd5e1', margin: '0 0 0.5rem 0' }}>?섏쓽 諛깆뾽 肄붾뱶</p>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', minHeight: '2.5rem' }}>
+                      {userProfile.backupCode ? (
+                        <span className="backup-code-text" style={{ fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '2px' }}>{userProfile.backupCode}</span>
+                      ) : (
+                        <button onClick={handleIssueBackupCode} className="primary-btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', borderRadius: '8px' }}>
+                          肄붾뱶 諛쒓툒 諛쏄린
+                        </button>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.5rem 0 0 0' }}>
+                      {userProfile.backupCode ? '??肄붾뱶瑜?蹂듭궗?섏뿬 湲곌린瑜?蹂寃쏀븯嫄곕굹 湲곕줉??吏?뚯죱????蹂듦뎄?????덉뒿?덈떎.' : (
+                        <>肄붾뱶瑜?諛쒓툒諛쏆븘 ??湲곕줉???덉쟾?섍쾶 諛깆뾽?섍퀬<br/>?듦퀎 諛??꾩쟾怨쇱젣 ?쒖뒪?쒖쓣 ?댁슜?대낫?몄슂.</>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="nickname-section" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
+                    <p className="modal-section-label" style={{ fontSize: '0.9rem', margin: '0 0 0.5rem 0' }}>怨꾩젙 遺덈윭?ㅺ린</p>
+                    <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                      <input 
+                        type="text" 
+                        value={recoverCode} 
+                        onChange={handleRecoverCodeChange} 
+                        placeholder="諛깆뾽 肄붾뱶 ?낅젰"
+                        className="nickname-input"
+                        maxLength={9}
+                        style={{ flex: 1, textTransform: 'uppercase', minWidth: '0' }}
+                      />
+                      <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: '8px' }}>
+                        蹂듦뎄
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
+  const [arrows, setArrows] = useState([])
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [gameStatus, setGameStatus] = useState('waiting') // 'waiting', 'playing', 'finished'
+  const [startTime, setStartTime] = useState(null)
+  const [timeElapsed, setTimeElapsed] = useState(0)
+  const [isStunned, setIsStunned] = useState(false)
+  const [mistakes, setMistakes] = useState(0)
+  const [showModal, setShowModal] = useState(false)
+  
+  // ?됰꽕??諛?由щ뜑蹂대뱶 ?깅줉 ?곹깭
+  const [nickname, setNickname] = useState(() => localStorage.getItem('arrow_game_nickname') || '')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
+  const [showNicknameWarning, setShowNicknameWarning] = useState(false)
+  
+  const timerRef = useRef(null)
+
+  const handleDebugSkip = () => {
+    setCurrentIndex(arrows.length);
+    setGameStatus('finished');
+    setShowModal(true);
+    triggerConfetti();
+  };
+
+
+
+  useEffect(() => {
+    setArrows(generateDailyArrows(50))
+  }, [])
+
+  useEffect(() => {
+    if (gameStatus === 'playing') {
+      timerRef.current = setInterval(() => {
+        setTimeElapsed(performance.now() - startTime)
+      }, 10)
+    } else {
+      clearInterval(timerRef.current)
+    }
+    return () => clearInterval(timerRef.current)
+  }, [gameStatus, startTime])
+
+  useEffect(() => {
+    if (gameStatus === 'finished' && userProfile) {
+      const processClearAchievements = async () => {
+        try {
+          const deviceId = userProfile.id;
+          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+          const todayStr = kstNow.toISOString().split('T')[0];
+          const timeSec = Number((timeElapsed / 1000).toFixed(2));
+          
+          let newTodayCount = 1;
+          if (userProfile.todayClearDate === todayStr) {
+            newTodayCount = (userProfile.todayClearCount || 0) + 1;
+          }
+
+          let newStreak = 1;
+          if (userProfile.lastPlayedDate) {
+            const today = new Date(todayStr);
+            const last = new Date(userProfile.lastPlayedDate);
+            const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) {
+              newStreak = userProfile.currentStreak || 0;
+            } else if (diffDays === 1) {
+              newStreak = (userProfile.currentStreak || 0) + 1;
+            }
+          }
+
+          const newUnlocked = [];
+          if (timeSec <= 15) newUnlocked.push('speed_15s');
+          if (timeSec <= 12) newUnlocked.push('speed_12s');
+          if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
+          if (mistakes === 0) newUnlocked.push('flawless');
+          if (newTodayCount >= 5) newUnlocked.push('play_5');
+          if (newTodayCount >= 10) newUnlocked.push('play_10');
+          newUnlocked.push('first_clear');
+          
+          if (newStreak >= 2) newUnlocked.push('streak_2');
+          if (newStreak >= 3) newUnlocked.push('streak_3');
+          if (newStreak >= 7) newUnlocked.push('streak_7');
+
+          const currentAchievements = userProfile.achievements || [];
+          const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+          const updatedAchievements = [...currentAchievements, ...actualNew];
+
+          const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
+          const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || 0, newStreak);
+
+          const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+          const newTotalBestRecords = [...(userProfile?.totalBestRecords || []), currentRecord]
+            .sort((a, b) => {
+              if (a.time !== b.time) return a.time - b.time;
+              return a.mistakes - b.mistakes;
+            })
+            .slice(0, 3);
+
+          const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+          const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+          const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
+
+          const dailyRecs = userProfile?.dailyRecords || {};
+          const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
+          const newDailyRecords = {
+            ...dailyRecs,
+            [todayStr]: {
+              todayPlayCount: todayDaily.todayPlayCount + 1,
+              todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+              todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+              todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+              todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
+            }
+          };
+
+          const updates = {
+            todayClearDate: todayStr,
+            todayClearCount: newTodayCount,
+            achievements: updatedAchievements,
+            totalPlayCount: newTotalPlayCount,
+            currentStreak: newStreak,
+            lastPlayedDate: todayStr,
+            totalLongestStreak: newTotalLongestStreak,
+            totalBestRecords: newTotalBestRecords,
+            totalPlayTime: newTotalPlayTime,
+            totalMistakes: newTotalMistakes,
+            totalPerfectClear: newTotalPerfectClear,
+            dailyRecords: newDailyRecords
+          };
+
+          await saveProfile(userProfile, updates);
+          if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
+        } catch (e) {
+          console.error('Error updating clear achievements:', e);
+        }
+      };
+      processClearAchievements();
+    }
+  }, [gameStatus]);
+
+  const handleKeyDown = useCallback((e) => {
+    if (isStunned || gameStatus === 'finished') return;
+    
+    const key = e.key;
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) return;
+
+    e.preventDefault();
+
+    if (gameStatus === 'waiting') {
+      setGameStatus('playing')
+      setStartTime(performance.now())
+    }
+
+    const expectedArrow = arrows[currentIndex];
+
+    if (key === expectedArrow) {
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      if (nextIndex >= arrows.length) {
+        setGameStatus('finished');
+        setShowModal(true);
+        triggerConfetti();
+      }
+    } else {
+      setIsStunned(true);
+      setMistakes(prev => prev + 1);
+      setTimeout(() => {
+        setIsStunned(false);
+      }, 500);
+    }
+  }, [arrows, currentIndex, gameStatus, isStunned])
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown, { passive: false });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [handleKeyDown])
+
+  const shareResult = () => {
+    const timeSec = (timeElapsed / 1000).toFixed(2);
+    const scoreText = mistakes === 0 ? '??Perfect Clear!' : `?렞 ${50 - mistakes}/50 (Mistakes: ${mistakes})`;
+    const text = `Daily Arrow\n?깍툘 ${timeSec}珥?n${scoreText}\nhttps://yourdomain.com`;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        alert('寃곌낵媛 ?대┰蹂대뱶??蹂듭궗?섏뿀?듬땲??');
+    }).catch(err => {
+        console.error('Failed to copy', err);
+    });
+  }
+
+  const handleNicknameChange = (e) => {
+    const val = e.target.value;
+    if (getByteLength(val) <= 20) {
+      setNickname(val);
+      setShowNicknameWarning(false);
+    } else {
+      setShowNicknameWarning(true);
+    }
+  }
+
+  const saveScore = async () => {
+    if (!nickname.trim()) return alert("?됰꽕?꾩쓣 ?낅젰?댁＜?몄슂!");
+    setIsSubmitting(true);
+    try {
+      const deviceId = userProfile.id;
+      const dailySeed = getDailySeed().toString();
+      localStorage.setItem('arrow_game_nickname', nickname.trim());
+      
+      const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
+      const newDocRef = doc(scoresRef); // 怨좎쑀 ID ?먮룞 ?앹꽦 (以묐났 ?깅줉 ?덉슜)
+      await setDoc(newDocRef, {
+        deviceId: deviceId,
+        nickname: nickname.trim(),
+        time: Number((timeElapsed / 1000).toFixed(2)),
+        mistakes: mistakes,
+        hasBackupCode: !!userProfile.backupCode,
+        timestamp: serverTimestamp()
+      });
+
+      const newUnlocked = ['leaderboard_entry'];
+      try {
+        const qList = query(scoresRef, orderBy('time', 'asc'), limit(5));
+        const snap = await getDocs(qList);
+        if (snap.size >= 5 && snap.docs[0].id === newDocRef.id) {
+          newUnlocked.push('top_1');
+        }
+      } catch(err) { console.error('Error checking top_1:', err); }
+
+      const currentAchievements = userProfile?.achievements || [];
+      const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+      
+      const updates = {
+        nickname: nickname.trim()
+      };
+      if (actualNew.length > 0) {
+        updates.achievements = [...currentAchievements, ...actualNew];
+      }
+      
+      await saveProfile(userProfile, updates);
+      if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
+
+      setIsSaved(true);
+      alert("?먯닔媛 ?깃났?곸쑝濡??깅줉?섏뿀?듬땲??");
+      onLeaderboard();
+    } catch (e) {
+      console.error(e);
+      alert("?깅줉???ㅽ뙣?덉뒿?덈떎.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const getLucideIcon = (key) => {
+    const size = 30; // 湲곕낯 ?ш린(24px)?먯꽌 ??1.2諛??뺣?
+    switch (key) {
+        case 'ArrowUp': return <LucideUp size={size} />;
+        case 'ArrowDown': return <LucideDown size={size} />;
+        case 'ArrowLeft': return <LucideLeft size={size} />;
+        case 'ArrowRight': return <LucideRight size={size} />;
+        default: return null;
+    }
+  }
+
+  return (
+    <div className="game-screen">
+      <div className={`game-content ${isStunned ? 'stunned' : ''}`} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div className="game-header" style={{ justifyContent: 'space-between' }}>
+        <button className="back-btn" onClick={onHome}>??Home</button>
+        {import.meta.env.DEV && (
+          <button className="back-btn" style={{ color: '#fbbf24' }} onClick={handleDebugSkip}>Skip (Debug)</button>
+        )}
+      </div>
+
+      <div className="status-bar">
+        <div className="timer">{(timeElapsed / 1000).toFixed(2)}s</div>
+        <div className="progress">{currentIndex} / {arrows.length}</div>
+      </div>
+      
+      <div className="grid-container">
+        {arrows.map((arrow, idx) => {
+          let statusClass = 'pending';
+          if (idx < currentIndex) statusClass = 'correct';
+          if (idx === currentIndex) statusClass = 'current';
+          if (idx === currentIndex && isStunned) statusClass = 'error';
+
+          return (
+            <div key={idx} className={`arrow-box ${statusClass}`}>
+              {getLucideIcon(arrow)}
+            </div>
+          )
+        })}
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay">
+            <div className="modal">
+              <button className="close-btn" onClick={() => setShowModal(false)}>??/button>
+              <h2>Game Clear! ?럦</h2>
+              <p>湲곕줉: {(timeElapsed / 1000).toFixed(2)}珥?/p>
+              {mistakes > 0 && <p style={{ fontSize: '1rem', marginTop: '-1rem' }}>?ㅼ닔: {mistakes}??/p>}
+              
+              {!isSaved && (
+                <div className="nickname-section">
+                  <input 
+                    type="text" 
+                    value={nickname} 
+                    onChange={handleNicknameChange} 
+                    placeholder="?됰꽕??(?쒓? 8?? ?곷Ц 20??"
+                    className="nickname-input"
+                  />
+                  <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: 0, minHeight: '1.2rem', visibility: showNicknameWarning ? 'visible' : 'hidden' }}>
+                    ?쒓?? 8湲?먭퉴吏, ?곸뼱??20?먭퉴吏 ?낅젰 媛?ν빀?덈떎
+                  </p>
+                  <button onClick={saveScore} disabled={isSubmitting || !nickname.trim()} className="primary-btn submit-btn">
+                    {isSubmitting ? '?깅줉 以?..' : '?먯닔 ?깅줉?섍린'}
+                  </button>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+                <button onClick={shareResult} className="share-btn">怨듭쑀?섍린</button>
+                {isSaved && <button onClick={onLeaderboard} className="secondary-btn" style={{ margin: 0 }}>Leaderboard</button>}
+              </div>
+            </div>
+        </div>
+      )}
+      </div>
+    </div>
+  )
+}
+
+function LeaderboardScreen({ onHome }) {
+  const [scores, setScores] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const dailySeed = getDailySeed().toString();
+        const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
+        // ?쒓컙 ?ㅻ쫫李⑥닚 (媛??吏㏃? ?쒓컙??1?? ?뺣젹
+        const q = query(scoresRef, orderBy('time', 'asc'), limit(50));
+        const snapshot = await getDocs(q);
+        
+        const fetchedScores = [];
+        let rank = 1;
+        snapshot.forEach((doc) => {
+          fetchedScores.push({ id: doc.id, rank: rank++, ...doc.data() });
+        });
+        setScores(fetchedScores);
+      } catch (e) {
+        console.error("Error fetching leaderboard:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeaderboard();
+  }, []);
+
+  return (
+    <div className="leaderboard-screen">
+      <div className="game-header">
+        <button className="back-btn" onClick={onHome}>??Home</button>
+      </div>
+      
+      <h1>Global Leaderboard</h1>
+      <p className="subtitle">Today's Top Players</p>
+
+      <div className="leaderboard-container">
+        {loading ? (
+          <p style={{ textAlign: 'center', color: '#94a3b8' }}>Loading...</p>
+        ) : (
+          <table className="leaderboard-table">
+            <thead>
+              <tr>
+                <th style={{ width: '80px' }}>Rank</th>
+                <th style={{ width: '40%' }}>Name</th>
+                <th>Time</th>
+                <th>Mistakes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scores.map((player) => {
+                const getMedal = (rank) => {
+                  if (rank === 1) return '?쪍';
+                  if (rank === 2) return '?쪎';
+                  if (rank === 3) return '?쪏';
+                  return '';
+                };
+                
+                return (
+                  <tr key={player.id}>
+                    <td>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '60px' }}>
+                        <span style={{ fontSize: '1.2em' }}>{getMedal(player.rank)}</span>
+                        <span>{player.rank}</span>
+                      </div>
+                    </td>
+                    <td>{player.nickname}</td>
+                    <td>{Number(player.time).toFixed(2)}s</td>
+                    <td>{player.mistakes}</td>
+                  </tr>
+                );
+              })}
+              {scores.length === 0 && (
+                <tr><td colSpan="4" style={{textAlign:'center'}}>?꾩쭅 ?깅줉??湲곕줉???놁뒿?덈떎!</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default App

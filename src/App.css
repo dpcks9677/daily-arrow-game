@@ -10,6 +10,7 @@
   min-height: 100vh;
 }
 
+
 .start-screen, .game-screen, .leaderboard-screen {
   display: flex;
   flex-direction: column;
@@ -29,12 +30,17 @@
 }
 
 h1 {
+  font-family: var(--font-title);
   font-size: 3.2em;
   line-height: 1.1;
   background: -webkit-linear-gradient(45deg, #4ade80, #3b82f6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 0.5rem;
+}
+
+h2, h3 {
+  font-family: var(--font-title);
 }
 
 .subtitle {
@@ -95,6 +101,10 @@ h1 {
   20%, 80% { transform: translate3d(2px, 0, 0); }
   30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
   40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+.shake-animation {
+  animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
 }
 
 .game-header {
@@ -617,4 +627,24 @@ body.light-mode .nickname-section {
 
 @keyframes sync-spin {
   to { transform: rotate(360deg); }
+}
+
+/* Achievement Popup */
+.achievement-popup {
+  background: rgba(30, 58, 138, 0.95);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+}
+
+.achievement-popup .achievement-title {
+  color: #f8fafc;
+}
+
+body.light-mode .achievement-popup {
+  background: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+  border-color: rgba(245, 158, 11, 0.8) !important;
+}
+
+body.light-mode .achievement-popup .achievement-title {
+  color: #1e293b !important;
 }

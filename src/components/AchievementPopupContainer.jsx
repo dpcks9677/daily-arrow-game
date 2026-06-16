@@ -44,20 +44,20 @@ export default function AchievementPopupContainer({ popups, setPopups }) {
         const ach = ACHIEVEMENTS.find(a => a.id === achId);
         if (!ach) return null;
         return (
-          <div key={ach.id} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(30, 58, 138, 0.95)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
+          <div key={ach.id} className="achievement-popup" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
             <button onClick={() => handleClose(ach.id)} style={{ position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✕</button>
             <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid rgba(245, 158, 11, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
               <Trophy size={20} color="#f59e0b" />
             </div>
             <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
               <p style={{ margin: 0, fontWeight: 'bold', fontSize: '0.85rem', color: '#f59e0b' }}>도전과제 달성!</p>
-              <p style={{ margin: 0, fontSize: '0.95rem', color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{ach.title}</p>
+              <p className="achievement-title" style={{ margin: 0, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{ach.title}</p>
             </div>
           </div>
         );
       })}
       {showSummary && (
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(30, 58, 138, 0.95)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', boxShadow: '0 4px 6px rgba(0,0,0,0.5)', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
+        <div className="achievement-popup" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.5)', width: '300px', animation: 'slideUp 0.3s ease-out forwards', pointerEvents: 'auto' }}>
           <button onClick={handleCloseSummary} style={{ position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✕</button>
           <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid rgba(245, 158, 11, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
             <Trophy size={20} color="#f59e0b" />

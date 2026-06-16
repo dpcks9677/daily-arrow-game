@@ -6,13 +6,16 @@ import { loadSecureProfile, saveSecureProfile, getKSTDateString } from './utils'
 
 import StartScreen from './components/StartScreen';
 import GameScreen from './components/GameScreen';
+import MultiplayerGameScreen from './components/MultiplayerGameScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
+import MultiplayerLobby from './components/MultiplayerLobby';
 import AchievementPopupContainer from './components/AchievementPopupContainer';
 
 import './App.css';
 
 function App() {
-  const [currentScreen, setCurrentScreen] = useState('start') // 'start', 'game', 'leaderboard'
+  const [currentScreen, setCurrentScreen] = useState('start') // 'start', 'game', 'leaderboard', 'multiplayer'
+  const [multiplayerData, setMultiplayerData] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('arrow_game_theme');
     if (saved !== null) return saved === 'dark';
@@ -132,8 +135,10 @@ function App() {
       {unlockedPopups.length > 0 && (
         <AchievementPopupContainer popups={unlockedPopups} setPopups={setUnlockedPopups} />
       )}
-      {currentScreen === 'start' && <StartScreen onPlay={handlePlay} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} isAuthLoading={isAuthLoading} />}
-      {currentScreen === 'game' && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {(currentScreen === 'start' || currentScreen === 'multiplayer') && <StartScreen onPlay={handlePlay} onMultiplayer={() => setCurrentScreen('multiplayer')} onLeaderboard={() => setCurrentScreen('leaderboard')} isDarkMode={isDarkMode} toggleTheme={toggleTheme} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} isAuthLoading={isAuthLoading} />}
+      {currentScreen === 'game' && !multiplayerData && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
+      {currentScreen === 'game' && multiplayerData && <MultiplayerGameScreen onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} onReplay={() => setCurrentScreen('multiplayer')} userProfile={userProfile} multiplayerData={multiplayerData} saveProfile={saveProfile} />}
+      {currentScreen === 'multiplayer' && <MultiplayerLobby onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} initialRoomId={multiplayerData?.roomId} onGameStart={(roomId, seed) => { setMultiplayerData({ roomId, seed }); setCurrentScreen('game'); }} userProfile={userProfile} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>
   )
