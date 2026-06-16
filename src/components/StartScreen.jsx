@@ -151,6 +151,9 @@ const [showHelp, setShowHelp] = useState(false);
         const newProfile = { ...oldData, id: deviceId };
         setUserProfile(newProfile);
         saveSecureProfile(newProfile);
+        if (newProfile.nickname) {
+          localStorage.setItem('arrow_game_nickname', newProfile.nickname);
+        }
         alert("계정 데이터가 성공적으로 복구되었습니다!");
         setShowProfile(false);
       }

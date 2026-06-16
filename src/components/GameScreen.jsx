@@ -16,7 +16,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
   const [showModal, setShowModal] = useState(false)
   
   // 닉네임 및 리더보드 등록 상태
-  const [nickname, setNickname] = useState(() => localStorage.getItem('arrow_game_nickname') || '')
+  const [nickname, setNickname] = useState(() => userProfile?.nickname || localStorage.getItem('arrow_game_nickname') || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [showNicknameWarning, setShowNicknameWarning] = useState(false)
