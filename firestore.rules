@@ -18,5 +18,11 @@ service cloud.firestore {
                    && request.resource.data.time >= 2.0
                    && request.resource.data.mistakes >= 0;
     }
+
+    // 멀티플레이 결과 로그 컬렉션
+    match /multiplayer_logs/{logId} {
+      allow write: if true;
+      allow read: if false;
+    }
   }
 }
