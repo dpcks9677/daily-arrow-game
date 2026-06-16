@@ -287,13 +287,17 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
                         </div>
                         <div style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}>
                           {!isFinished ? (
-                            <span style={{ color: '#64748b' }}>플레이 중...</span>
+                            p.wantsReplay ? (
+                              <span style={{ color: '#64748b' }}>로비로 이동함</span>
+                            ) : (
+                              <span style={{ color: '#64748b' }}>플레이 중...</span>
+                            )
                           ) : p.isDisconnected ? (
                             <span style={{ color: '#ef4444' }}>포기</span>
                           ) : (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <span style={{ color: 'rgba(255,255,255,0.2)', paddingLeft: '5px' }}>|</span>
-                              <span style={{ display: 'inline-block', width: '65px', textAlign: 'center' }}>{p.finalTime}초</span>
+                              <span style={{ display: 'inline-block', width: '65px', textAlign: 'center' }}>{Number(p.finalTime).toFixed(2)}s</span>
                               <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
                               <span style={{ display: 'inline-block', width: '55px', textAlign: 'left', color: '#94a3b8' }}>실수: {p.mistakes}</span>
                             </span>
