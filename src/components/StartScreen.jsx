@@ -305,12 +305,10 @@ const [showHelp, setShowHelp] = useState(false);
         <button className="primary-btn" onClick={onPlay} disabled={isAuthLoading}>Play</button>
         <button className="secondary-btn" onClick={onLeaderboard} disabled={isAuthLoading}>Leaderboard</button>
       </div>
-      {isAuthLoading && (
-        <div className="sync-loader-container">
-          <div className="sync-spinner"></div>
-          <span>동기화 중</span>
-        </div>
-      )}
+      <div className="sync-loader-container" style={{ visibility: isAuthLoading ? 'visible' : 'hidden' }}>
+        <div className="sync-spinner"></div>
+        <span>동기화 중</span>
+      </div>
 
       {showHelp && (
         <div className="modal-overlay" onClick={() => setShowHelp(false)}>
