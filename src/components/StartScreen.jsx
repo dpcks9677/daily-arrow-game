@@ -544,7 +544,7 @@ const [showHelp, setShowHelp] = useState(false);
             <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '510px', width: '95%', position: 'relative' }}>
               <button className="close-btn" onClick={() => setShowStatistics(false)}>✕</button>
 
-              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>{statsPage === 0 ? '통계' : '날짜 별 기록'}</h2>
+              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>{statsPage === 0 ? '통계 요약' : statsPage === 1 ? '역대 최고 기록' : '최근 7일 기록'}</h2>
 
               {/* Pagination Arrows */}
               {statsPage > 0 && (
@@ -552,7 +552,7 @@ const [showHelp, setShowHelp] = useState(false);
                   <LucideLeft size={24} />
                 </button>
               )}
-              {statsPage < 1 && (
+              {statsPage < 2 && (
                 <button onClick={() => setStatsPage(p => p + 1)} style={{ position: 'absolute', right: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
                   <LucideRight size={24} />
                 </button>
@@ -562,8 +562,8 @@ const [showHelp, setShowHelp] = useState(false);
                 <p>로딩 중...</p>
               ) : (
                 <>
-                  {statsPage === 0 ? (
-                    <div style={{ width: '90%', margin: '0 auto', height: '780px', display: 'flex', flexDirection: 'column' }}>
+                  {statsPage === 0 && (
+                    <div style={{ width: '90%', margin: '0 auto', height: '540px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
@@ -654,9 +654,15 @@ const [showHelp, setShowHelp] = useState(false);
                         })()}
                       </div>
 
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                      
+                    </div>
+                  )}
+
+                  {statsPage === 1 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', minHeight: '540px', justifyContent: 'flex-start' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '0.8rem', height: '316px', overflowY: 'auto' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', margin: 'auto 0' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: 'auto 0' }}>
                           {[0, 1, 2].map((idx) => {
                             const record = userProfile.totalBestRecords ? userProfile.totalBestRecords[idx] : null;
                             return (
@@ -666,14 +672,14 @@ const [showHelp, setShowHelp] = useState(false);
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                                     {record ? (
                                       <>
-                                        <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
+                                        <span className="stat-highlight" style={{ fontSize: '0.925rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
                                         <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
                                           {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
                                         </span>
                                       </>
                                     ) : (
                                       <>
-                                        <span className="stat-highlight" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#94a3b8' }}>기록 없음</span>
+                                        <span className="stat-highlight" style={{ fontSize: '0.925rem', fontWeight: 'bold', color: '#94a3b8' }}>기록 없음</span>
                                         <span style={{ fontSize: '0.8rem', color: '#64748b' }}>-</span>
                                       </>
                                     )}
@@ -685,52 +691,7 @@ const [showHelp, setShowHelp] = useState(false);
                           })}
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', height: '780px', justifyContent: 'center' }}>
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '420px' }}>
-                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>최근 7일 기록</h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-                          {(() => {
-                            const dailyRecs = userProfile.dailyRecords || {};
-                            const kstNow = getKSTDate();
-                            const list = [];
-                            for(let i=0; i<7; i++) {
-                              const d = new Date(kstNow.getTime() - i * 24 * 60 * 60 * 1000);
-                              const dateStr = d.toISOString().split('T')[0];
-                              const rec = dailyRecs[dateStr];
-                              if (rec) {
-                                list.push({ dateStr, rec });
-                              }
-                            }
-                            if (list.length === 0) return <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0.5rem 0' }}>최근 7일간의 기록이 없습니다.</p>;
-                            
-                            const header = (
-                              <div key="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.2rem 0.4rem 0.2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '0.2rem' }}>
-                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold' }}>날짜</span>
-                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>플레이 횟수</span>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>최고 기록</span>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>실수</span>
-                                </div>
-                              </div>
-                            );
-
-                            return [header, ...list.map((item, idx) => (
-                              <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
-                                <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-','.')}</span>
-                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayPlayCount || 0}회</span>
-                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
-                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayBestMistakes === 0 ? '0회' : `${item.rec.todayBestMistakes}회`}</span>
-                                </div>
-                              </div>
-                            ))];
-                          })()}
-                        </div>
-                      </div>
-
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '265px' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '240px' }}>
                         {(() => {
                           const kstNow = getKSTDate();
                           const todayDow = kstNow.getDay();
@@ -787,7 +748,7 @@ const [showHelp, setShowHelp] = useState(false);
                           }
 
                           return (
-                            <>
+                            <div style={{ transform: 'translateY(-5px)' }}>
                               <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>잔디 기록</h3>
                               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.75rem' }}>
                                 <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: '4px', paddingRight: '0.2rem', paddingTop: '18px' }}>
@@ -810,7 +771,7 @@ const [showHelp, setShowHelp] = useState(false);
                                   </div>
                                 </div>
                               </div>
-                              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.4rem', marginTop: '-0.5rem', fontSize: '0.75rem', color: '#94a3b8' }}>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.4rem', marginTop: '0', fontSize: '0.75rem', color: '#94a3b8' }}>
                                 <span>Less</span>
                                 <div style={{ display: 'flex', gap: '4px' }}>
                                   <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }} />
@@ -821,12 +782,59 @@ const [showHelp, setShowHelp] = useState(false);
                                 </div>
                                 <span>More</span>
                               </div>
-                            </>
+                            </div>
                           );
                         })()}
                       </div>
                     </div>
                   )}
+
+                  {statsPage === 2 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', height: '540px', justifyContent: 'center' }}>
+                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>최근 7일 기록</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                          {(() => {
+                            const dailyRecs = userProfile.dailyRecords || {};
+                            const kstNow = getKSTDate();
+                            const list = [];
+                            for(let i=0; i<7; i++) {
+                              const d = new Date(kstNow.getTime() - i * 24 * 60 * 60 * 1000);
+                              const dateStr = d.toISOString().split('T')[0];
+                              const rec = dailyRecs[dateStr];
+                              if (rec) {
+                                list.push({ dateStr, rec });
+                              }
+                            }
+                            if (list.length === 0) return <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0.5rem 0' }}>최근 7일간의 기록이 없습니다.</p>;
+                            
+                            const header = (
+                              <div key="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.2rem 0.4rem 0.2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '0.2rem' }}>
+                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold' }}>날짜</span>
+                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>플레이 횟수</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>최고 기록</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>실수</span>
+                                </div>
+                              </div>
+                            );
+
+                            return [header, ...list.map((item, idx) => (
+                              <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
+                                <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-','.')}</span>
+                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayPlayCount || 0}회</span>
+                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
+                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayBestMistakes === 0 ? '0회' : `${item.rec.todayBestMistakes}회`}</span>
+                                </div>
+                              </div>
+                            ))];
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                 </>
               )}
             </div>
