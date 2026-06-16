@@ -51,90 +51,12 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
     if (gameStatus === 'finished' && userProfile) {
       const processClearAchievements = async () => {
         try {
-          const deviceId = userProfile.id;
-          const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-          const todayStr = kstNow.toISOString().split('T')[0];
           const timeSec = Number((timeElapsed / 1000).toFixed(2));
-          
-          let newTodayCount = 1;
-          if (userProfile.todayClearDate === todayStr) {
-            newTodayCount = (userProfile.todayClearCount || 0) + 1;
+          const result = processGameCompletion(userProfile, timeSec, mistakes);
+          if (result) {
+            await saveProfile(userProfile, result.updates);
+            if (result.actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...result.actualNew]);
           }
-
-          let newStreak = 1;
-          if (userProfile.lastPlayedDate) {
-            const today = new Date(todayStr);
-            const last = new Date(userProfile.lastPlayedDate);
-            const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
-            if (diffDays === 0) {
-              newStreak = userProfile.currentStreak || 0;
-            } else if (diffDays === 1) {
-              newStreak = (userProfile.currentStreak || 0) + 1;
-            }
-          }
-
-          const newUnlocked = [];
-          if (timeSec <= 15) newUnlocked.push('speed_15s');
-          if (timeSec <= 12) newUnlocked.push('speed_12s');
-          if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
-          if (mistakes === 0) newUnlocked.push('flawless');
-          if (newTodayCount >= 5) newUnlocked.push('play_5');
-          if (newTodayCount >= 10) newUnlocked.push('play_10');
-          newUnlocked.push('first_clear');
-          
-          if (newStreak >= 2) newUnlocked.push('streak_2');
-          if (newStreak >= 3) newUnlocked.push('streak_3');
-          if (newStreak >= 7) newUnlocked.push('streak_7');
-
-          const currentAchievements = userProfile.achievements || [];
-          const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
-          const updatedAchievements = [...currentAchievements, ...actualNew];
-
-          const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
-          const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || 0, newStreak);
-
-          const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
-          const newTotalBestRecords = [...(userProfile?.totalBestRecords || []), currentRecord]
-            .sort((a, b) => {
-              if (a.time !== b.time) return a.time - b.time;
-              return a.mistakes - b.mistakes;
-            })
-            .slice(0, 3);
-
-          const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
-          const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
-          const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
-
-          const dailyRecs = userProfile?.dailyRecords || {};
-          const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
-          const newDailyRecords = {
-            ...dailyRecs,
-            [todayStr]: {
-              todayPlayCount: todayDaily.todayPlayCount + 1,
-              todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
-              todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
-              todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
-              todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
-            }
-          };
-
-          const updates = {
-            todayClearDate: todayStr,
-            todayClearCount: newTodayCount,
-            achievements: updatedAchievements,
-            totalPlayCount: newTotalPlayCount,
-            currentStreak: newStreak,
-            lastPlayedDate: todayStr,
-            totalLongestStreak: newTotalLongestStreak,
-            totalBestRecords: newTotalBestRecords,
-            totalPlayTime: newTotalPlayTime,
-            totalMistakes: newTotalMistakes,
-            totalPerfectClear: newTotalPerfectClear,
-            dailyRecords: newDailyRecords
-          };
-
-          await saveProfile(userProfile, updates);
-          if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
         } catch (e) {
           console.error('Error updating clear achievements:', e);
         }
