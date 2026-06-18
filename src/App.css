@@ -716,11 +716,19 @@ body.light-mode .achievement-popup .achievement-title {
     word-break: keep-all;
   }
 
+  .streak-container {
+    transform: translateY(20px);
+  }
+
   .button-group {
     flex-direction: column;
     width: 100%;
     max-width: 160px;
     margin: 1rem auto 0;
+  }
+
+  .multiplay-btn {
+    display: none;
   }
 
   .primary-btn, .secondary-btn, .share-btn {

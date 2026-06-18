@@ -307,7 +307,7 @@ const [showHelp, setShowHelp] = useState(false);
       
       <div className="button-group">
         <button className="primary-btn" onClick={onPlay} disabled={isAuthLoading}>Play</button>
-        <button className="primary-btn" onClick={onMultiplayer} disabled={isAuthLoading}>Multiplay</button>
+        <button className="primary-btn multiplay-btn" onClick={onMultiplayer} disabled={isAuthLoading}>Multiplay</button>
         <button className="secondary-btn" onClick={onLeaderboard} disabled={isAuthLoading}>Leaderboard</button>
       </div>
       <div className="sync-loader-container" style={{ visibility: isAuthLoading ? 'visible' : 'hidden' }}>
