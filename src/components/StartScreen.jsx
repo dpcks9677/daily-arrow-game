@@ -925,7 +925,7 @@ const [showHelp, setShowHelp] = useState(false);
 
                   <div className="nickname-section" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
                     <p className="modal-section-label" style={{ fontSize: '0.9rem', margin: '0 0 0.5rem 0' }}>계정 불러오기</p>
-                    <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', width: '100%', alignItems: 'center' }}>
                       <input 
                         type="text" 
                         value={recoverCode} 
@@ -933,9 +933,9 @@ const [showHelp, setShowHelp] = useState(false);
                         placeholder="백업 코드 입력"
                         className="nickname-input"
                         maxLength={9}
-                        style={{ flex: 1, textTransform: 'uppercase', minWidth: '0' }}
+                        style={{ width: '100%', textTransform: 'uppercase', textAlign: 'center' }}
                       />
-                      <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: '8px' }}>
+                      <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', borderRadius: '8px', width: 'auto', minWidth: '100px' }}>
                         복구
                       </button>
                     </div>

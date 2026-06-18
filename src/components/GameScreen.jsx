@@ -8,11 +8,22 @@ import MobileDPad from './MobileDPad';
 
 export default function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
   const [arrows, setArrows] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [gameStatus, setGameStatus] = useState('waiting') // 'waiting', 'playing', 'finished'
+  
+  const currentIndexRef = useRef(0);
+  const [currentIndex, _setCurrentIndex] = useState(0);
+  const setCurrentIndex = useCallback((val) => { currentIndexRef.current = val; _setCurrentIndex(val); }, []);
+  
+  const gameStatusRef = useRef('waiting');
+  const [gameStatus, _setGameStatus] = useState('waiting'); // 'waiting', 'playing', 'finished'
+  const setGameStatus = useCallback((val) => { gameStatusRef.current = val; _setGameStatus(val); }, []);
+  
   const [startTime, setStartTime] = useState(null)
   const [timeElapsed, setTimeElapsed] = useState(0)
-  const [isStunned, setIsStunned] = useState(false)
+  
+  const isStunnedRef = useRef(false);
+  const [isStunned, _setIsStunned] = useState(false);
+  const setIsStunned = useCallback((val) => { isStunnedRef.current = val; _setIsStunned(val); }, []);
+  
   const [mistakes, setMistakes] = useState(0)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showModal, setShowModal] = useState(false)
@@ -74,9 +85,9 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
   }, [gameStatus]);
 
   const processInput = useCallback((key) => {
-    if (isStunned || gameStatus === 'finished') return;
+    if (isStunnedRef.current || gameStatusRef.current === 'finished') return;
 
-    if (gameStatus === 'waiting') {
+    if (gameStatusRef.current === 'waiting') {
       setGameStatus('playing')
       setStartTime(performance.now())
 
@@ -100,10 +111,10 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
       }
     }
 
-    const expectedArrow = arrows[currentIndex];
+    const expectedArrow = arrows[currentIndexRef.current];
 
     if (key === expectedArrow) {
-      const nextIndex = currentIndex + 1;
+      const nextIndex = currentIndexRef.current + 1;
       setCurrentIndex(nextIndex);
       if (nextIndex >= arrows.length) {
         setGameStatus('finished');
@@ -117,7 +128,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
         setIsStunned(false);
       }, 500);
     }
-  }, [arrows, currentIndex, gameStatus, isStunned, userProfile, saveProfile])
+  }, [arrows, userProfile, saveProfile, setCurrentIndex, setGameStatus, setIsStunned])
 
   const handleKeyDown = useCallback((e) => {
     const key = e.key;

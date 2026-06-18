@@ -14,13 +14,26 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
   
   const [roomData, setRoomData] = useState(null);
   const [arrows, setArrows] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [gameStatus, setGameStatus] = useState('countdown'); // 'countdown', 'playing', 'finished'
+  
+  const currentIndexRef = useRef(0);
+  const [currentIndex, _setCurrentIndex] = useState(0);
+  const setCurrentIndex = useCallback((val) => { currentIndexRef.current = val; _setCurrentIndex(val); }, []);
+
+  const gameStatusRef = useRef('countdown');
+  const [gameStatus, _setGameStatus] = useState('countdown'); // 'countdown', 'playing', 'finished'
+  const setGameStatus = useCallback((val) => { gameStatusRef.current = val; _setGameStatus(val); }, []);
+  
   const [countdown, setCountdown] = useState(3);
   const [startTime, setStartTime] = useState(null);
   const [timeElapsed, setTimeElapsed] = useState(0);
-  const [isStunned, setIsStunned] = useState(false);
-  const [mistakes, setMistakes] = useState(0);
+  
+  const isStunnedRef = useRef(false);
+  const [isStunned, _setIsStunned] = useState(false);
+  const setIsStunned = useCallback((val) => { isStunnedRef.current = val; _setIsStunned(val); }, []);
+  
+  const mistakesRef = useRef(0);
+  const [mistakes, _setMistakes] = useState(0);
+  const setMistakes = useCallback((val) => { mistakesRef.current = val; _setMistakes(val); }, []);
   const [isAllFinished, setIsAllFinished] = useState(false);
   const [statsSaved, setStatsSaved] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -136,12 +149,12 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
   }, [isAllFinished, roomData, statsSaved, userProfile, saveProfile, userId, roomId, seed]);
 
   const processInput = useCallback((key) => {
-    if (isStunned || gameStatus !== 'playing') return;
+    if (isStunnedRef.current || gameStatusRef.current !== 'playing') return;
     
-    const expectedArrow = arrows[currentIndex];
+    const expectedArrow = arrows[currentIndexRef.current];
 
     if (key === expectedArrow) {
-      const nextIndex = currentIndex + 1;
+      const nextIndex = currentIndexRef.current + 1;
       setCurrentIndex(nextIndex);
       
       // Update progress in RTDB
@@ -150,11 +163,11 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
       if (nextIndex >= arrows.length) {
         setGameStatus('finished');
         const finalTime = Number(((performance.now() - startTime) / 1000).toFixed(2));
-        finishGame(roomId, userId, finalTime, mistakes).catch(console.error);
+        finishGame(roomId, userId, finalTime, mistakesRef.current).catch(console.error);
       }
     } else {
       setIsStunned(true);
-      const newMistakes = mistakes + 1;
+      const newMistakes = mistakesRef.current + 1;
       setMistakes(newMistakes);
       
       // Trigger mistake in RTDB for shake animation
@@ -164,7 +177,7 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
         setIsStunned(false);
       }, 500);
     }
-  }, [arrows, currentIndex, gameStatus, isStunned, roomId, userId, startTime, mistakes]);
+  }, [arrows, startTime, roomId, userId, setCurrentIndex, setGameStatus, setIsStunned, setMistakes]);
 
   const handleKeyDown = useCallback((e) => {
     const key = e.key;
