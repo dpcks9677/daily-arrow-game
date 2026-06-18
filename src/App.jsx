@@ -80,7 +80,7 @@ function App() {
         } else if (localData) {
           setUserProfile({ ...localData, id: deviceId });
         } else {
-          await fetchAndMerge({
+          const newProfile = {
             id: deviceId,
             backupCode: null,
             nickname: localStorage.getItem('arrow_game_nickname') || '',
@@ -95,7 +95,9 @@ function App() {
             totalMistakes: 0,
             totalPerfectClear: 0,
             isNew: true
-          });
+          };
+          setUserProfile(newProfile);
+          saveSecureProfile(newProfile);
         }
       } catch (error) {
         console.error("Anonymous auth failed:", error);
