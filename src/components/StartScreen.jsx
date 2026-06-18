@@ -20,6 +20,7 @@ const [showHelp, setShowHelp] = useState(false);
   const [debugTime, setDebugTime] = useState(9.5);
   const [debugMistakes, setDebugMistakes] = useState(0);
   const [nicknameError, setNicknameError] = useState('');
+  const [showDebug, setShowDebug] = useState(false);
 
   const handleRecoverCodeChange = (e) => {
     let val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -169,16 +170,16 @@ const [showHelp, setShowHelp] = useState(false);
 
   return (
     <div className="start-screen">
-<div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+      <div className="start-screen-header">
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'default' }}>
+        <div className="streak-container">
           <Flame size={32} color={isPlayedToday ? '#ef4444' : '#64748b'} fill={isPlayedToday ? '#f97316' : 'transparent'} className={isPlayedToday ? 'flame-burning' : ''} />
-          <span style={{ fontWeight: 'bold', fontSize: '1.4rem', color: isPlayedToday ? '#f97316' : '#64748b', letterSpacing: '-1px' }}>
+          <span className="streak-text" style={{ color: isPlayedToday ? '#f97316' : '#64748b' }}>
             {isActive ? `DAY ${streak}` : 'NO STREAK'}
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="icon-group">
           {!userProfile?.backupCode ? (
             <div className="custom-tooltip-wrapper">
               <button 
@@ -299,10 +300,10 @@ const [showHelp, setShowHelp] = useState(false);
           </div>
         </div>
       </div>
-      <h1 style={{ marginTop: '60px' }}>
+      <h1 className="main-title">
         Daily 50 Arrows
       </h1>
-      <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요! (매일 자정 갱신)</p>
+      <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요!<br />(매일 자정 갱신)</p>
       
       <div className="button-group">
         <button className="primary-btn" onClick={onPlay} disabled={isAuthLoading}>Play</button>
@@ -334,9 +335,18 @@ const [showHelp, setShowHelp] = useState(false);
 
 
       {import.meta.env.DEV && (
-        <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', background: 'rgba(0,0,0,0.8)', padding: '1rem', borderRadius: '8px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px' }}>
-          <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
-          <button onClick={async () => {
+        <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <button 
+            onClick={() => setShowDebug(!showDebug)} 
+            style={{ background: '#fbbf24', color: '#000', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginBottom: showDebug ? '0.5rem' : '0', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}
+          >
+            {showDebug ? '▼ Close Debug UI' : '▶ Open Debug UI'}
+          </button>
+          
+          {showDebug && (
+            <div style={{ background: 'rgba(0,0,0,0.9)', padding: '1rem', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+              <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
+              <button onClick={async () => {
              const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalLongestStreak: 0, totalBestRecords: [], totalPlayTime: 0, totalMistakes: 0, totalPerfectClear: 0, dailyRecords: {}, multiplayerPlays: 0, multiplayerWins: 0, multiplayerCompletions: 0, multiplayerBestTime: null };
              await saveProfile(userProfile, resetData);
           }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
@@ -493,6 +503,8 @@ const [showHelp, setShowHelp] = useState(false);
           }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
             점수 등록 트리거 (스트릭 +1 강제 반영)
           </button>
+        </div>
+          )}
         </div>
       )}
 

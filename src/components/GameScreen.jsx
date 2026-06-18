@@ -4,16 +4,24 @@ import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDoc
 import { db } from '../firebase';
 import { generateDailyArrows, processGameCompletion, getDailySeed, getByteLength, getKSTDateString } from '../utils';
 import { triggerConfetti } from '../utils';
+import MobileDPad from './MobileDPad';
 
 export default function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
-  const [arrows, setArrows] = useState([])
-  const [currentIndex, setCurrentIndex] = useState(0)
+  const [arrows, setArrows] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [gameStatus, setGameStatus] = useState('waiting') // 'waiting', 'playing', 'finished'
   const [startTime, setStartTime] = useState(null)
   const [timeElapsed, setTimeElapsed] = useState(0)
   const [isStunned, setIsStunned] = useState(false)
   const [mistakes, setMistakes] = useState(0)
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showModal, setShowModal] = useState(false)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // 닉네임 및 리더보드 등록 상태
   const [nickname, setNickname] = useState(() => userProfile?.nickname || localStorage.getItem('arrow_game_nickname') || '')
@@ -65,13 +73,8 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
     }
   }, [gameStatus]);
 
-  const handleKeyDown = useCallback((e) => {
+  const processInput = useCallback((key) => {
     if (isStunned || gameStatus === 'finished') return;
-    
-    const key = e.key;
-    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) return;
-
-    e.preventDefault();
 
     if (gameStatus === 'waiting') {
       setGameStatus('playing')
@@ -114,7 +117,14 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
         setIsStunned(false);
       }, 500);
     }
-  }, [arrows, currentIndex, gameStatus, isStunned])
+  }, [arrows, currentIndex, gameStatus, isStunned, userProfile, saveProfile])
+
+  const handleKeyDown = useCallback((e) => {
+    const key = e.key;
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) return;
+    e.preventDefault();
+    processInput(key);
+  }, [processInput])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown, { passive: false });
@@ -240,19 +250,48 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
       </div>
       
       <div className="grid-container">
-        {arrows.map((arrow, idx) => {
-          let statusClass = 'pending';
-          if (idx < currentIndex) statusClass = 'correct';
-          if (idx === currentIndex) statusClass = 'current';
-          if (idx === currentIndex && isStunned) statusClass = 'error';
+        {isMobile ? (
+          [...Array(25)].map((_, v) => {
+            const completedRows = Math.floor(currentIndex / 5);
+            const rowInView = Math.floor(v / 5);
+            
+            let logicalRow = rowInView;
+            if (completedRows > rowInView) {
+              logicalRow = rowInView + 5;
+            }
+            
+            const idx = logicalRow * 5 + (v % 5);
 
-          return (
-            <div key={idx} className={`arrow-box ${statusClass}`}>
-              {getLucideIcon(arrow)}
-            </div>
-          )
-        })}
+            const arrow = arrows[idx];
+            let statusClass = 'pending';
+            if (idx < currentIndex) statusClass = 'correct';
+            if (idx === currentIndex) statusClass = 'current';
+            if (idx === currentIndex && isStunned) statusClass = 'error';
+
+            return (
+              <div key={idx} className={`arrow-box ${statusClass} animate-fade-in`}>
+                {getLucideIcon(arrow)}
+              </div>
+            );
+          })
+        ) : (
+          arrows.map((arrow, idx) => {
+            let statusClass = 'pending';
+            if (idx < currentIndex) statusClass = 'correct';
+            if (idx === currentIndex) statusClass = 'current';
+            if (idx === currentIndex && isStunned) statusClass = 'error';
+
+            return (
+              <div key={idx} className={`arrow-box ${statusClass}`}>
+                {getLucideIcon(arrow)}
+              </div>
+            );
+          })
+        )}
       </div>
+
+      <MobileDPad onDirectionPress={processInput} />
+
 
       {showModal && (
         <div className="modal-overlay">

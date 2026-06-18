@@ -6,6 +6,7 @@ import { db, rtdb } from '../firebase';
 import { generateDailyArrows, getKSTDateString } from '../utils';
 import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom } from '../multiplayerUtils';
 import MultiplayerBoard from './MultiplayerBoard';
+import MobileDPad from './MobileDPad';
 
 export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, multiplayerData, saveProfile }) {
   const { roomId, seed } = multiplayerData;
@@ -22,8 +23,15 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
   const [mistakes, setMistakes] = useState(0);
   const [isAllFinished, setIsAllFinished] = useState(false);
   const [statsSaved, setStatsSaved] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   const timerRef = useRef(null);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // RTDB Listener
   useEffect(() => {
@@ -127,14 +135,9 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
     }
   }, [isAllFinished, roomData, statsSaved, userProfile, saveProfile, userId, roomId, seed]);
 
-  const handleKeyDown = useCallback(async (e) => {
+  const processInput = useCallback((key) => {
     if (isStunned || gameStatus !== 'playing') return;
     
-    const key = e.key;
-    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) return;
-
-    e.preventDefault();
-
     const expectedArrow = arrows[currentIndex];
 
     if (key === expectedArrow) {
@@ -162,6 +165,13 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
       }, 500);
     }
   }, [arrows, currentIndex, gameStatus, isStunned, roomId, userId, startTime, mistakes]);
+
+  const handleKeyDown = useCallback((e) => {
+    const key = e.key;
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) return;
+    e.preventDefault();
+    processInput(key);
+  }, [processInput]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown, { passive: false });
@@ -231,19 +241,47 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
               {countdown}
             </div>
           )}
-          {arrows.map((arrow, idx) => {
-            let statusClass = 'pending';
-            if (idx < currentIndex) statusClass = 'correct';
-            if (idx === currentIndex && !countdown) statusClass = 'current';
-            if (idx === currentIndex && isStunned) statusClass = 'error';
+          {isMobile ? (
+            [...Array(25)].map((_, v) => {
+              const completedRows = Math.floor(currentIndex / 5);
+              const rowInView = Math.floor(v / 5);
+              
+              let logicalRow = rowInView;
+              if (completedRows > rowInView) {
+                logicalRow = rowInView + 5;
+              }
+              
+              const idx = logicalRow * 5 + (v % 5);
 
-            return (
-              <div key={idx} className={`arrow-box ${statusClass}`}>
-                {getLucideIcon(arrow)}
-              </div>
-            )
-          })}
+              const arrow = arrows[idx];
+              let statusClass = 'pending';
+              if (idx < currentIndex) statusClass = 'correct';
+              if (idx === currentIndex && !countdown) statusClass = 'current';
+              if (idx === currentIndex && isStunned) statusClass = 'error';
+
+              return (
+                <div key={idx} className={`arrow-box ${statusClass} animate-fade-in`}>
+                  {getLucideIcon(arrow)}
+                </div>
+              );
+            })
+          ) : (
+            arrows.map((arrow, idx) => {
+              let statusClass = 'pending';
+              if (idx < currentIndex) statusClass = 'correct';
+              if (idx === currentIndex && !countdown) statusClass = 'current';
+              if (idx === currentIndex && isStunned) statusClass = 'error';
+
+              return (
+                <div key={idx} className={`arrow-box ${statusClass}`}>
+                  {getLucideIcon(arrow)}
+                </div>
+              );
+            })
+          )}
         </div>
+
+        <MobileDPad onDirectionPress={processInput} />
 
         {/* Multiplayer Board (Mini Grid) */}
         <MultiplayerBoard roomData={roomData} myUserId={userId} />
