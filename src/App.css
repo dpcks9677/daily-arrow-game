@@ -786,3 +786,260 @@ body.light-mode .achievement-popup .achievement-title {
     touch-action: manipulation;
   }
 }
+
+/* ==========================================================================
+   Discord Authentication & Integration Styles
+   ========================================================================== */
+
+/* Header Discord Login Button */
+.discord-header-btn {
+  background: #5865F2;
+  color: #ffffff;
+  border: none;
+  border-radius: 20px;
+  padding: 0.4rem 0.85rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.3);
+  white-space: nowrap;
+}
+
+.discord-header-btn:hover {
+  background: #4752c4;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(88, 101, 242, 0.45);
+}
+
+.discord-header-btn:active {
+  transform: translateY(0);
+}
+
+/* Profile Icon with Discord Avatar */
+.discord-avatar-btn {
+  border-color: #5865F2 !important;
+  box-shadow: 0 0 10px rgba(88, 101, 242, 0.35);
+}
+
+/* Discord Profile Card (in Modal) */
+.discord-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: rgba(88, 101, 242, 0.12);
+  border: 1px solid rgba(88, 101, 242, 0.35);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.8rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.discord-profile-avatar-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.discord-profile-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid #5865F2;
+  object-fit: cover;
+  display: block;
+}
+
+.discord-profile-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #5865F2;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.discord-online-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #23a55a;
+  border: 2px solid #0f172a;
+}
+
+.discord-profile-info {
+  flex: 1;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.discord-profile-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.discord-global-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.discord-tag {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.discord-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #5865F2;
+}
+
+.discord-unlink-btn {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border-radius: 6px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.discord-unlink-btn:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+/* Discord Connect Card (in Modal) */
+.discord-connect-card {
+  background: rgba(88, 101, 242, 0.1);
+  border: 1px solid rgba(88, 101, 242, 0.3);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.discord-connect-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.discord-connect-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(88, 101, 242, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5865F2;
+  flex-shrink: 0;
+}
+
+.discord-connect-text {
+  flex: 1;
+}
+
+.discord-connect-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #f8fafc;
+}
+
+.discord-connect-desc {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 0.15rem;
+  line-height: 1.35;
+}
+
+.discord-login-btn {
+  background: #5865F2;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(88, 101, 242, 0.35);
+}
+
+.discord-login-btn:hover {
+  background: #4752c4;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(88, 101, 242, 0.5);
+}
+
+.discord-login-btn:active {
+  transform: translateY(0);
+}
+
+/* Light Mode Overrides for Discord Components */
+body.light-mode .discord-global-name {
+  color: #0f172a;
+}
+
+body.light-mode .discord-connect-title {
+  color: #0f172a;
+}
+
+body.light-mode .discord-connect-desc,
+body.light-mode .discord-tag {
+  color: #64748b;
+}
+
+body.light-mode .discord-online-dot {
+  border-color: #ffffff;
+}
+
+body.light-mode .discord-profile-card {
+  background: rgba(88, 101, 242, 0.08);
+  border-color: rgba(88, 101, 242, 0.25);
+}
+
+body.light-mode .discord-connect-card {
+  background: rgba(88, 101, 242, 0.06);
+  border-color: rgba(88, 101, 242, 0.2);
+}
+

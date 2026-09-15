@@ -59,7 +59,8 @@ export function processGameCompletion(userProfile, timeSec, mistakes) {
     if (newStreak >= 7) newUnlocked.push('streak_7');
 
     const currentAchievements = userProfile.achievements || [];
-    const actualNew = userProfile.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+    const isProfileRegistered = !!(userProfile.backupCode || userProfile.discordId);
+    const actualNew = isProfileRegistered ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
     const updatedAchievements = [...currentAchievements, ...actualNew];
 
     const newTotalPlayCount = (userProfile.totalPlayCount || 0) + 1;
@@ -196,6 +197,9 @@ export function getArrowSymbol(key) {
     }
 }
 
+/**
+ * @deprecated Legacy backup code generation. Deprecated in favor of Discord authentication.
+ */
 export function generateBackupCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';

@@ -1,11 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Check, Flame, Trophy, BarChart, AlertCircle } from 'lucide-react';
+import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Flame, Trophy, BarChart, AlertCircle, LogOut } from 'lucide-react';
 import { collection, doc, setDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getByteLength, generateBackupCode, saveSecureProfile, getKSTDate, getKSTDateString, processGameCompletion, getStreakStatus } from '../utils';
+import { getByteLength, saveSecureProfile, getKSTDate, getKSTDateString, processGameCompletion, getStreakStatus } from '../utils';
 import { ACHIEVEMENTS } from '../constants';
+import { DiscordIcon } from '../discordAuth';
 
-export default function StartScreen({ onPlay, onMultiplayer, onLeaderboard, isDarkMode, toggleTheme, userProfile, setUserProfile, saveProfile, setUnlockedPopups, isAuthLoading }) {
+export default function StartScreen({ 
+  onPlay, 
+  onMultiplayer, 
+  onLeaderboard, 
+  isDarkMode, 
+  toggleTheme, 
+  userProfile, 
+  setUserProfile, 
+  saveProfile, 
+  setUnlockedPopups, 
+  isAuthLoading,
+  discordUser,
+  onDiscordLogin,
+  onDiscordLogout 
+}) {
 
 const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -17,6 +32,7 @@ const [showHelp, setShowHelp] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [editNicknameValue, setEditNicknameValue] = useState('');
+  const [showLegacyBackup, setShowLegacyBackup] = useState(false);
   const [debugTime, setDebugTime] = useState(9.5);
   const [debugMistakes, setDebugMistakes] = useState(0);
   const [nicknameError, setNicknameError] = useState('');
@@ -83,54 +99,7 @@ const [showHelp, setShowHelp] = useState(false);
     }
   };
 
-  const handleIssueBackupCode = async () => {
-    try {
-      let newCode;
-      let isUnique = false;
-      const usersRef = collection(db, 'users');
-      
-      while (!isUnique) {
-        newCode = generateBackupCode();
-        const q = query(usersRef, where('backupCode', '==', newCode));
-        const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-          isUnique = true;
-        }
-      }
-
-      const deviceId = userProfile.id;
-      const kstNow = getKSTDate();
-      const issuedDateStr = getKSTDateString();
-      
-      // 백업 코드를 발급받는 유저는 계속 플레이할 진성 유저일 확률이 높으므로,
-      // 데이터베이스 구조의 일관성을 위해 나머지 기본 요소들도 함께 생성해줍니다.
-      const fullProfile = {
-        id: deviceId,
-        backupCode: newCode,
-        backupCodeIssuedAt: issuedDateStr,
-        nickname: userProfile?.nickname || '',
-        currentStreak: userProfile?.currentStreak || 0,
-        lastPlayedDate: userProfile?.lastPlayedDate || '',
-        achievements: userProfile?.achievements || [],
-        totalPlayCount: userProfile?.totalPlayCount || 0,
-        totalLongestStreak: userProfile?.totalLongestStreak || userProfile?.currentStreak || 0,
-        gameStartDate: userProfile?.gameStartDate || issuedDateStr,
-        totalBestRecords: userProfile?.totalBestRecords || [],
-        totalPlayTime: userProfile?.totalPlayTime || 0,
-        totalMistakes: userProfile?.totalMistakes || 0,
-        totalPerfectClear: userProfile?.totalPerfectClear || 0,
-        createdAt: serverTimestamp() // 최초 등록 시간 기록
-      };
-
-      await setDoc(doc(db, 'users', deviceId), fullProfile, { merge: true });
-      setUserProfile(fullProfile);
-      saveSecureProfile(fullProfile);
-    } catch (e) {
-      console.error(e);
-      alert("백업 코드 발급에 실패했습니다.");
-    }
-  };
-
+  // 과거 백업 코드를 현재 계정(또는 디스코드 계정)으로 마이그레이션/복구
   const handleRecover = async () => {
     if (!recoverCode.trim()) return alert("백업 코드를 입력해주세요.");
     setIsRecovering(true);
@@ -146,17 +115,35 @@ const [showHelp, setShowHelp] = useState(false);
         const oldData = matchedDoc.data();
         
         const deviceId = userProfile.id;
-        // 현재 인증된 내 계정(deviceId) 덮어쓰기 (기존 테스트 데이터가 섞이지 않도록 완전히 덮어씌움)
-        await setDoc(doc(db, 'users', deviceId), oldData);
         
-        const newProfile = { ...oldData, id: deviceId };
-        setUserProfile(newProfile);
-        saveSecureProfile(newProfile);
-        if (newProfile.nickname) {
-          localStorage.setItem('arrow_game_nickname', newProfile.nickname);
+        // 디스코드 계정이 연동되어 있다면 디스코드 식별 정보를 유지하면서 전적을 이전
+        const discordFields = discordUser ? {
+          discordId: userProfile.discordId || discordUser.id,
+          discordUsername: userProfile.discordUsername || discordUser.username,
+          discordGlobalName: userProfile.discordGlobalName || discordUser.global_name,
+          discordAvatar: userProfile.discordAvatar || null,
+        } : {};
+
+        const mergedProfile = {
+          ...oldData,
+          ...discordFields,
+          id: deviceId
+        };
+
+        // Firestore에 현재 deviceId 문서로 저장
+        await setDoc(doc(db, 'users', deviceId), mergedProfile, { merge: true });
+        
+        setUserProfile(mergedProfile);
+        saveSecureProfile(mergedProfile);
+        if (mergedProfile.nickname) {
+          localStorage.setItem('arrow_game_nickname', mergedProfile.nickname);
         }
-        alert("계정 데이터가 성공적으로 복구되었습니다!");
+        
+        alert(discordUser 
+          ? "과거 백업 코드의 전적이 현재 Discord 계정으로 성공적으로 이전되었습니다!" 
+          : "계정 데이터가 성공적으로 복구되었습니다! 이제 Discord로 로그인하시면 백업 코드 없이도 언제 어디서든 기록이 안전하게 유지됩니다.");
         setShowProfile(false);
+        setRecoverCode('');
       }
     } catch (e) {
       console.error(e);
@@ -167,6 +154,7 @@ const [showHelp, setShowHelp] = useState(false);
   };
 
   const { isActive, streak, isPlayedToday } = getStreakStatus(userProfile);
+  const isProfileRegistered = !!(userProfile?.backupCode || userProfile?.discordId);
 
   return (
     <div className="start-screen">
@@ -180,7 +168,18 @@ const [showHelp, setShowHelp] = useState(false);
         </div>
 
         <div className="icon-group">
-          {!userProfile?.backupCode ? (
+          {!discordUser && (
+            <button 
+              className="discord-header-btn"
+              onClick={onDiscordLogin}
+              title="Discord 계정으로 로그인하여 기록을 영구 보존하세요"
+            >
+              <DiscordIcon size={16} />
+              <span>Discord 로그인</span>
+            </button>
+          )}
+
+          {!isProfileRegistered ? (
             <div className="custom-tooltip-wrapper">
               <button 
                 className="icon-btn"
@@ -197,7 +196,7 @@ const [showHelp, setShowHelp] = useState(false);
               >
                 <Trophy size={24} />
               </button>
-              <span className="custom-tooltip">프로필을 생성하고 도전과제 시스템을 활성화 하세요.</span>
+              <span className="custom-tooltip">Discord로 로그인하여 도전과제 시스템을 활성화하세요.</span>
             </div>
           ) : (
             <div className="custom-tooltip-wrapper">
@@ -221,7 +220,7 @@ const [showHelp, setShowHelp] = useState(false);
             </div>
           )}
 
-          {!userProfile?.backupCode ? (
+          {!isProfileRegistered ? (
             <div className="custom-tooltip-wrapper">
               <button 
                 className="icon-btn"
@@ -238,7 +237,7 @@ const [showHelp, setShowHelp] = useState(false);
               >
                 <BarChart size={24} />
               </button>
-              <span className="custom-tooltip">프로필을 생성하고 통계 시스템을 활성화 하세요.</span>
+              <span className="custom-tooltip">Discord로 로그인하여 통계 시스템을 활성화하세요.</span>
             </div>
           ) : (
             <div className="custom-tooltip-wrapper">
@@ -261,20 +260,43 @@ const [showHelp, setShowHelp] = useState(false);
               <span className="custom-tooltip">통계</span>
             </div>
           )}
+
           <div className="custom-tooltip-wrapper">
             <button 
-              className="icon-btn"
+              className={`icon-btn ${discordUser ? 'discord-avatar-btn' : ''}`}
               onClick={() => setShowProfile(true)}
-              style={{ position: 'relative', width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+              style={{ 
+                position: 'relative', 
+                width: '40px', 
+                height: '40px', 
+                background: discordUser ? 'rgba(88, 101, 242, 0.2)' : 'rgba(255,255,255,0.1)', 
+                border: discordUser ? '1.5px solid #5865F2' : '1px solid rgba(255,255,255,0.2)', 
+                borderRadius: '8px', 
+                color: '#cbd5e1', 
+                cursor: 'pointer', 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center',
+                padding: 0,
+                overflow: 'hidden'
+              }}
             >
-              <User size={24} />
-              {(!userProfile?.backupCode && userProfile) && (
+              {discordUser && userProfile?.discordAvatar ? (
+                <img 
+                  src={userProfile.discordAvatar} 
+                  alt={userProfile.nickname || "Discord Avatar"} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <User size={24} />
+              )}
+              {(!isProfileRegistered && userProfile) && (
                 <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#1e293b', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px' }}>
                   <AlertCircle size={16} color="#fbbf24" fill="#1e293b" />
                 </div>
               )}
             </button>
-            <span className="custom-tooltip">내 프로필</span>
+            <span className="custom-tooltip">{discordUser ? `${userProfile?.nickname || '프로필'} (Discord 연동됨)` : '내 프로필 (Discord 미연동)'}</span>
           </div>
           
           <div className="custom-tooltip-wrapper">
@@ -389,7 +411,7 @@ const [showHelp, setShowHelp] = useState(false);
                if (newStreak >= 7) newUnlocked.push('streak_7');
 
                const currentAchievements = userProfile?.achievements || [];
-               const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+               const actualNew = isProfileRegistered ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
                const updatedAchievements = [...currentAchievements, ...actualNew];
 
                const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
@@ -455,7 +477,7 @@ const [showHelp, setShowHelp] = useState(false);
              if (newStreak >= 7) newUnlocked.push('streak_7');
 
              const currentAchievements = userProfile?.achievements || [];
-             const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+             const actualNew = isProfileRegistered ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
              const updatedAchievements = [...currentAchievements, ...actualNew];
 
              const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
@@ -863,9 +885,54 @@ const [showHelp, setShowHelp] = useState(false);
                 <p>로딩 중...</p>
               ) : (
                 <>
-                  <div style={{ position: 'relative', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {/* 1. Discord 계정 연동 카드 */}
+                  {discordUser ? (
+                    <div className="discord-profile-card">
+                      <div className="discord-profile-avatar-wrap">
+                        {userProfile.discordAvatar ? (
+                          <img src={userProfile.discordAvatar} alt={userProfile.nickname || "Avatar"} className="discord-profile-avatar" />
+                        ) : (
+                          <div className="discord-profile-avatar-fallback"><DiscordIcon size={26} /></div>
+                        )}
+                        <div className="discord-online-dot" title="연결됨" />
+                      </div>
+                      <div className="discord-profile-info">
+                        <div className="discord-profile-name-row">
+                          <span className="discord-global-name">{discordUser.global_name || discordUser.username}</span>
+                          <span className="discord-tag">@{discordUser.username}</span>
+                        </div>
+                        <div className="discord-status-badge">
+                          <DiscordIcon size={12} />
+                          <span>Discord 연동 계정</span>
+                        </div>
+                      </div>
+                      <button onClick={onDiscordLogout} className="discord-unlink-btn" title="계정 연동 해제">
+                        <LogOut size={15} />
+                        <span>해제</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="discord-connect-card">
+                      <div className="discord-connect-header">
+                        <div className="discord-connect-icon-box">
+                          <DiscordIcon size={24} />
+                        </div>
+                        <div className="discord-connect-text">
+                          <div className="discord-connect-title">Discord 계정 연동</div>
+                          <div className="discord-connect-desc">스트릭, 통계, 업적을 안전하게 영구 보존하세요.</div>
+                        </div>
+                      </div>
+                      <button onClick={onDiscordLogin} className="discord-login-btn">
+                        <DiscordIcon size={18} />
+                        <span>Discord로 간편 로그인</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 2. 게임 내 닉네임 설정 */}
+                  <div style={{ position: 'relative', marginBottom: '1.2rem', marginTop: '0.8rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                      <p className="modal-section-label" style={{ fontSize: '0.9rem', margin: 0 }}>저장 닉네임</p>
+                      <p className="modal-section-label" style={{ fontSize: '0.88rem', margin: 0 }}>게임 내 표시 닉네임</p>
                       {!isEditingNickname ? (
                         <button onClick={() => setIsEditingNickname(true)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }} title="닉네임 수정">
                           <Pencil size={14} />
@@ -905,40 +972,35 @@ const [showHelp, setShowHelp] = useState(false);
                     </div>
                   </div>
                   
-                  <div className="modal-info-box" style={{ textAlign: 'center', background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem' }}>
-                    <p style={{ fontSize: '0.9rem', color: '#cbd5e1', margin: '0 0 0.5rem 0' }}>나의 백업 코드</p>
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', minHeight: '2.5rem' }}>
-                      {userProfile.backupCode ? (
-                        <span className="backup-code-text" style={{ fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '2px' }}>{userProfile.backupCode}</span>
-                      ) : (
-                        <button onClick={handleIssueBackupCode} className="primary-btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', borderRadius: '8px' }}>
-                          코드 발급 받기
-                        </button>
-                      )}
-                    </div>
-                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.5rem 0 0 0' }}>
-                      {userProfile.backupCode ? '이 코드를 복사하여 기기를 변경하거나 기록이 지워졌을 때 복구할 수 있습니다.' : (
-                        <>코드를 발급받아 내 기록을 안전하게 백업하고<br/>통계 및 도전과제 시스템을 이용해보세요.</>
-                      )}
-                    </p>
-                  </div>
-
-                  <div className="nickname-section" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
-                    <p className="modal-section-label" style={{ fontSize: '0.9rem', margin: '0 0 0.5rem 0' }}>계정 불러오기</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', width: '100%', alignItems: 'center' }}>
-                      <input 
-                        type="text" 
-                        value={recoverCode} 
-                        onChange={handleRecoverCodeChange} 
-                        placeholder="백업 코드 입력"
-                        className="nickname-input"
-                        maxLength={9}
-                        style={{ width: '100%', textTransform: 'uppercase', textAlign: 'center' }}
-                      />
-                      <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', borderRadius: '8px', width: 'auto', minWidth: '100px' }}>
-                        복구
-                      </button>
-                    </div>
+                  {/* 3. 과거 백업 코드 데이터 이전 창구 (기존 유저용 접이식) */}
+                  <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.85rem', width: '100%' }}>
+                    <button 
+                      onClick={() => setShowLegacyBackup(!showLegacyBackup)} 
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline', width: '100%', textAlign: 'center' }}
+                    >
+                      {showLegacyBackup ? '▲ 과거 백업 코드 가져오기 닫기' : '▼ 과거 백업 코드로 데이터 가져오기'}
+                    </button>
+                    {showLegacyBackup && (
+                      <div style={{ marginTop: '0.8rem', background: 'rgba(30, 58, 138, 0.25)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                        <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: '0 0 0.5rem 0', textAlign: 'center', lineHeight: '1.4' }}>
+                          이전에 발급받은 8자리 백업 코드가 있다면 입력하여<br />기존 스트릭과 기록을 불러옵니다.
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                          <input 
+                            type="text" 
+                            value={recoverCode} 
+                            onChange={handleRecoverCodeChange} 
+                            placeholder="백업 코드 입력"
+                            className="nickname-input"
+                            maxLength={9}
+                            style={{ width: '140px', textTransform: 'uppercase', textAlign: 'center', fontSize: '0.8rem', padding: '0.35rem' }}
+                          />
+                          <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', borderRadius: '6px' }}>
+                            {isRecovering ? '가져오는 중...' : '불러오기'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               )}

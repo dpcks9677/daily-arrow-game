@@ -91,7 +91,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
       setGameStatus('playing')
       setStartTime(performance.now())
 
-      if (userProfile && userProfile.backupCode) {
+      if (userProfile && (userProfile.backupCode || userProfile.discordId)) {
         const todayStr = getKSTDateString();
         const dailyRecs = userProfile.dailyRecords || {};
         const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0, todayTrials: 0 };
@@ -145,7 +145,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
   }, [handleKeyDown])
 
   const handleHomeClick = async () => {
-    if (gameStatus === 'playing' && userProfile && userProfile.backupCode) {
+    if (gameStatus === 'playing' && userProfile && (userProfile.backupCode || userProfile.discordId)) {
       const currentAchievements = userProfile.achievements || [];
       if (!currentAchievements.includes('quit_once')) {
         const updatedAchievements = [...currentAchievements, 'quit_once'];
@@ -197,7 +197,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
         nickname: nickname.trim(),
         time: Number((timeElapsed / 1000).toFixed(2)),
         mistakes: mistakes,
-        hasBackupCode: !!userProfile.backupCode,
+        hasBackupCode: !!(userProfile.backupCode || userProfile.discordId),
         timestamp: serverTimestamp()
       });
 
@@ -211,7 +211,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
       } catch(err) { console.error('Error checking top_1:', err); }
 
       const currentAchievements = userProfile?.achievements || [];
-      const actualNew = userProfile?.backupCode ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+      const actualNew = (userProfile?.backupCode || userProfile?.discordId) ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
       
       const updates = {
         nickname: nickname.trim()
