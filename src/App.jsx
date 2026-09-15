@@ -93,6 +93,7 @@ function App() {
             deviceId = 'discord_' + activeDiscordUser.id;
           } catch (actErr) {
             console.warn("Discord Activity initialization notice:", actErr);
+            showToast(actErr.message || "디스코드 프로필 로드 실패", "info");
             deviceId = localStorage.getItem('arrow_game_device_id') || ('activity_' + Math.random().toString(36).substring(2, 10));
           }
           localStorage.setItem('arrow_game_device_id', deviceId);

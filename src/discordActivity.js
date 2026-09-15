@@ -36,14 +36,33 @@ export async function initDiscordActivity() {
   discordSdkInstance = new DiscordSDK(clientId);
   await discordSdkInstance.ready();
 
-  // 2. 디스코드 클라이언트로부터 일회용 인가 코드(code) 자동 획득
-  const { code } = await discordSdkInstance.commands.authorize({
-    client_id: clientId,
-    response_type: 'code',
-    state: '',
-    prompt: 'none',
-    scope: ['identify', 'guilds', 'applications.commands'],
-  });
+  // 2. 디스코드 클라이언트로부터 일회용 인가 코드(code) 획득
+  let code;
+  try {
+    // 먼저 무음 인가 시도 (기존 승인 유저)
+    const silentRes = await discordSdkInstance.commands.authorize({
+      client_id: clientId,
+      response_type: 'code',
+      state: '',
+      prompt: 'none',
+      scope: ['identify'],
+    });
+    code = silentRes.code;
+  } catch (silentErr) {
+    console.log("Silent authorize fallback to consent prompt:", silentErr);
+    // 신규 접속자이거나 승인이 필요한 경우 승인 팝업 띄우기
+    const consentRes = await discordSdkInstance.commands.authorize({
+      client_id: clientId,
+      response_type: 'code',
+      state: '',
+      scope: ['identify'],
+    });
+    code = consentRes.code;
+  }
+
+  if (!code) {
+    throw new Error('디스코드 인가 코드를 획득하지 못했습니다.');
+  }
 
   // 3. 백엔드(/api/discord-auth)로 code 전송하여 access_token 및 프로필 획득
   const response = await fetch('/api/discord-auth', {
@@ -51,6 +70,11 @@ export async function initDiscordActivity() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code })
   });
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error('백엔드 토큰 교환 서버(/api/discord-auth)에 연결할 수 없습니다. Developer Portal의 URL Mapping Target이 활성 터널 주소인지 확인해주세요.');
+  }
 
   if (!response.ok) {
     const errText = await response.text();
