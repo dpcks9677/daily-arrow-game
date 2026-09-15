@@ -75,11 +75,11 @@ function App() {
 
   useEffect(() => {
     const initUser = async () => {
+      const todayStr = getKSTDateString();
       try {
         setIsAuthLoading(true);
         const userCredential = await signInAnonymously(auth);
         const deviceId = userCredential.user.uid;
-        const todayStr = getKSTDateString();
 
         let activeDiscordUser = null;
 
@@ -220,7 +220,27 @@ function App() {
         }
       } catch (error) {
         console.error("Auth init failed:", error);
-        showToast("인증에 실패했습니다. 네트워크 또는 파이어베이스 설정을 확인해주세요.", "error");
+        showToast(`인증 실패 [${error.code || 'ERROR'}]: ${error.message || '인증 서버 연결 실패'}`, "error");
+
+        // 인증 실패 시에도 로컬 플레이가 가능하도록 fallback 프로필 설정
+        const fallbackLocal = loadSecureProfile();
+        const fallbackId = fallbackLocal?.id || ('guest_' + Math.random().toString(36).substring(2, 9));
+        const fallbackProfile = fallbackLocal || {
+          id: fallbackId,
+          nickname: localStorage.getItem('arrow_game_nickname') || '게스트',
+          currentStreak: 0,
+          lastPlayedDate: '',
+          achievements: [],
+          totalPlayCount: 0,
+          totalLongestStreak: 0,
+          gameStartDate: todayStr || getKSTDateString(),
+          totalBestRecords: [],
+          totalPlayTime: 0,
+          totalMistakes: 0,
+          totalPerfectClear: 0,
+          isNew: true
+        };
+        setUserProfile(fallbackProfile);
       } finally {
         setIsAuthLoading(false);
       }
