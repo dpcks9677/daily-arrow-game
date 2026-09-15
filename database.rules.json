@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "rooms": {
+      ".read": true,
+      ".write": true
+    },
+    "voice_channel_rooms": {
+      ".read": true,
+      ".write": true
+    },
+    "_clock_sync": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

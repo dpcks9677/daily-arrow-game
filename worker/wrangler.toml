@@ -1,0 +1,7 @@
+name = "daily-arrow-auth"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+
+[vars]
+DISCORD_CLIENT_ID = "1549217749316804608"
+DISCORD_CLIENT_SECRET = "fTsIFrNglzN7zktF9cF4ECqlPzEU1236"

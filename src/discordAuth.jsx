@@ -42,14 +42,22 @@ export function getDiscordAuthUrl() {
  */
 export async function exchangeDiscordCode(code) {
   const redirectUri = window.location.origin;
+  const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
+  const endpoint = baseAuthUrl ? `${baseAuthUrl}/api/discord-auth` : '/api/discord-auth';
 
-  const response = await fetch('/api/discord-auth', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ code, redirectUri }),
-  });
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code, redirectUri }),
+    });
+  } catch (err) {
+    console.error('exchangeDiscordCode fetch error:', err);
+    throw new Error(`토큰 서버 통신 오류 (${err.message}). 광고 차단기(AdBlock)나 브라우저 보호 기능이 활성화되어 있다면 해제 후 다시 시도해 주세요.`);
+  }
 
   const data = await response.json();
   if (!response.ok || !data.success) {

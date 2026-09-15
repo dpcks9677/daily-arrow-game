@@ -9,11 +9,18 @@ let discordSdkInstance = null;
 export function isDiscordActivity() {
   if (typeof window === 'undefined') return false;
   try {
+    if (window.location.hostname.includes('discordsays.com')) return true;
     const params = new URLSearchParams(window.location.search);
-    return params.has('frame_id') || params.has('instance_id');
+    if (params.has('frame_id') || params.has('instance_id')) return true;
+    if (window.location.ancestorOrigins) {
+      for (let i = 0; i < window.location.ancestorOrigins.length; i++) {
+        if (window.location.ancestorOrigins[i].includes('discord')) return true;
+      }
+    }
   } catch (e) {
     return false;
   }
+  return false;
 }
 
 /**
@@ -64,16 +71,51 @@ export async function initDiscordActivity() {
     throw new Error('디스코드 인가 코드를 획득하지 못했습니다.');
   }
 
-  // 3. 백엔드(/api/discord-auth)로 code 전송하여 access_token 및 프로필 획득
-  const response = await fetch('/api/discord-auth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code })
-  });
+  // 3. 백엔드로 code 전송하여 access_token 및 프로필 획득
+  const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
+  
+  let response = null;
+  let lastError = null;
 
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    throw new Error('백엔드 토큰 교환 서버(/api/discord-auth)에 연결할 수 없습니다. Developer Portal의 URL Mapping Target이 활성 터널 주소인지 확인해주세요.');
+  // Discord Activity 환경에서는 Discord Developer Portal에 매핑된 /api 경로를 최우선 호출
+  const candidateEndpoints = isDiscordActivity()
+    ? [
+        '/api/discord-auth',
+        '/api',
+        '/.proxy/api/discord-auth',
+        '/.proxy/api',
+        baseAuthUrl ? `${baseAuthUrl}/api/discord-auth` : null
+      ].filter(Boolean)
+    : [
+        baseAuthUrl ? `${baseAuthUrl}/api/discord-auth` : null,
+        '/api/discord-auth'
+      ].filter(Boolean);
+
+  for (const endpoint of candidateEndpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const cType = res.headers.get('content-type') || '';
+      if (cType.includes('application/json')) {
+        response = res;
+        break;
+      } else {
+        console.warn(`[Discord Activity] Endpoint ${endpoint} returned non-JSON (${cType})`);
+      }
+    } catch (e) {
+      console.warn(`[Discord Activity] Endpoint ${endpoint} failed:`, e);
+      lastError = e;
+    }
+  }
+
+  if (!response) {
+    if (isDiscordActivity()) {
+      throw new Error('디스코드 보안 정책(CSP)으로 통신이 차단되었습니다. Discord Developer Portal의 URL Mappings(/api) 설정을 확인해 주세요.');
+    }
+    throw new Error(lastError ? lastError.message : '토큰 교환 서버와 통신할 수 없습니다.');
   }
 
   if (!response.ok) {

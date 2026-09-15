@@ -197,16 +197,58 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
       const dailySeed = getDailySeed().toString();
       localStorage.setItem('arrow_game_nickname', nickname.trim());
       
-      const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
-      const newDocRef = doc(scoresRef); // 고유 ID 자동 생성 (중복 등록 허용)
-      await setDoc(newDocRef, {
-        deviceId: deviceId,
-        nickname: nickname.trim(),
-        time: Number((timeElapsed / 1000).toFixed(2)),
-        mistakes: mistakes,
-        hasBackupCode: !!(userProfile.backupCode || userProfile.discordId),
-        timestamp: serverTimestamp()
-      });
+      const timeSec = Number((timeElapsed / 1000).toFixed(2));
+      const hasBackupCode = !!(userProfile.backupCode || userProfile.discordId);
+
+      // 1. 디스코드 액티비티 환경(CSP 제약)을 위해 Worker Proxy 우선 시도
+      let savedViaProxy = false;
+      const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
+      const candidateEndpoints = [
+        '/api/save-score',
+        '/.proxy/api/save-score',
+        baseAuthUrl ? `${baseAuthUrl}/api/save-score` : null,
+      ].filter(Boolean);
+
+      for (const ep of candidateEndpoints) {
+        try {
+          const res = await fetch(ep, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              seed: dailySeed,
+              deviceId,
+              nickname: nickname.trim(),
+              time: timeSec,
+              mistakes,
+              hasBackupCode,
+            }),
+          });
+          const cType = res.headers.get('content-type') || '';
+          if (cType.includes('application/json')) {
+            const data = await res.json();
+            if (data.success) {
+              savedViaProxy = true;
+              break;
+            }
+          }
+        } catch (e) {
+          // fallback
+        }
+      }
+
+      // 2. 프록시 실패 시 (또는 일반 웹 브라우저 환경) Firestore SDK 직접 저장
+      if (!savedViaProxy) {
+        const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
+        const newDocRef = doc(scoresRef);
+        await setDoc(newDocRef, {
+          deviceId: deviceId,
+          nickname: nickname.trim(),
+          time: timeSec,
+          mistakes: mistakes,
+          hasBackupCode: hasBackupCode,
+          timestamp: serverTimestamp()
+        });
+      }
 
       const newUnlocked = ['leaderboard_entry'];
       try {

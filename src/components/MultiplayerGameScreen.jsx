@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight } from 'lucide-react';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, onValue } from 'firebase/database';
-import { db, rtdb } from '../firebase';
+import { db } from '../firebase';
 import { generateDailyArrows, getKSTDateString } from '../utils';
-import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom } from '../multiplayerUtils';
+import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom, subscribeRoom, getServerNow, COUNTDOWN_DURATION_MS } from '../multiplayerUtils';
 import MultiplayerBoard from './MultiplayerBoard';
 import MobileDPad from './MobileDPad';
 
@@ -46,16 +45,14 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // RTDB Listener
+  // RTDB Listener (Web & Discord Activity compliant)
   useEffect(() => {
-    const roomRef = ref(rtdb, `rooms/${roomId}`);
-    const unsubscribe = onValue(roomRef, (snapshot) => {
-      if (!snapshot.exists()) {
+    const unsubscribe = subscribeRoom(roomId, (data) => {
+      if (!data) {
         // Room deleted
         onHome();
         return;
       }
-      const data = snapshot.val();
       
       // 만약 내 데이터가 사라졌다면(방에서 강퇴당했거나 다른 탭에서 나갔다면) 로비로 튕기게 처리
       if (!data.players || !data.players[userId]) {
@@ -65,39 +62,61 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
       setRoomData(data);
         
-        // Check if all players are finished or disconnected
-        const players = data.players || {};
-        const allDone = Object.values(players).every(p => p.finishedAt !== null || p.isDisconnected);
-        if (allDone && gameStatus === 'finished') {
-          setIsAllFinished(true);
-        }
-    });
+      // Check if all players are finished or disconnected
+      const players = data.players || {};
+      const allDone = Object.values(players).every(p => p.finishedAt !== null || p.isDisconnected);
+      if (allDone && gameStatus === 'finished') {
+        setIsAllFinished(true);
+      }
+    }, 400);
+
     return () => unsubscribe();
   }, [roomId, gameStatus, onHome, userId]);
 
-  // Initial Setup & Countdown
+  // Initial Setup: 화살표 배열 생성
   useEffect(() => {
     setArrows(generateDailyArrows(50, seed));
-    
-    // Countdown logic
-    let count = 3;
-    setCountdown(count);
-    const interval = setInterval(() => {
-      count--;
-      if (count > 0) {
-        setCountdown(count);
-      } else if (count === 0) {
-        setCountdown('Go!');
-      } else {
-        clearInterval(interval);
-        setCountdown(null);
-        setGameStatus('playing');
-        setStartTime(performance.now());
-      }
-    }, 1000);
-    
-    return () => clearInterval(interval);
   }, [seed]);
+
+  // 서버 타임스탬프 기반 카운트다운 (방법 A)
+  // roomData.startedAt (서버 시각)을 기준으로 남은 시간을 매 프레임 역산하여
+  // 모든 클라이언트에서 카운트다운 종료 시점이 동일하도록 보장합니다.
+  useEffect(() => {
+    if (!roomData?.startedAt) return;
+
+    const serverStartedAt = roomData.startedAt;
+    const countdownMs = roomData.countdownDuration || COUNTDOWN_DURATION_MS;
+    // 서버 시각 기준으로 "카운트다운이 끝나는 절대 시각" 계산
+    const gameStartsAt = serverStartedAt + countdownMs;
+
+    let rafId;
+    const tick = () => {
+      const serverNow = getServerNow();
+      const remaining = gameStartsAt - serverNow;
+
+      if (remaining > 3000) {
+        setCountdown(3);
+      } else if (remaining > 2000) {
+        setCountdown(3);
+      } else if (remaining > 1000) {
+        setCountdown(2);
+      } else if (remaining > 0) {
+        setCountdown(remaining > 500 ? 1 : 'Go!');
+      } else {
+        // 카운트다운 완료 → 게임 시작
+        setCountdown(null);
+        if (gameStatusRef.current === 'countdown') {
+          setGameStatus('playing');
+          setStartTime(performance.now());
+        }
+        return; // rAF 루프 중단
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [roomData?.startedAt, roomData?.countdownDuration, setGameStatus]);
 
   // Timer
   useEffect(() => {
@@ -193,7 +212,12 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
   const handleHomeClick = async () => {
     if (gameStatus === 'playing') {
-      const confirmGiveUp = window.confirm('게임을 포기하고 나가시겠습니까? 꼴찌로 기록됩니다.');
+      let confirmGiveUp = true;
+      try {
+        confirmGiveUp = window.confirm('게임을 포기하고 나가시겠습니까? 꼴찌로 기록됩니다.');
+      } catch (e) {
+        confirmGiveUp = true;
+      }
       if (!confirmGiveUp) return;
       
       await giveUpGame(roomId, userId);

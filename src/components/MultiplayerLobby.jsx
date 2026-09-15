@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Users, LogOut, Play, UserPlus, CheckCircle, Circle, Copy, Volume2 } from 'lucide-react';
-import { ref, onValue, get } from 'firebase/database';
-import { rtdb } from '../firebase';
-import { createRoom, joinRoom, leaveRoom, toggleReady, startGame, getOrCreateVoiceChannelRoom } from '../multiplayerUtils';
+import { 
+  createRoom, 
+  joinRoom, 
+  leaveRoom, 
+  toggleReady, 
+  startGame, 
+  getOrCreateVoiceChannelRoom,
+  subscribeRoom,
+  getRoomPlayers,
+  measureClockOffset
+} from '../multiplayerUtils';
 
 export default function MultiplayerLobby({ onHome, onGameStart, userProfile, initialRoomId, isActivity, channelId }) {
   const [roomId, setRoomId] = useState(initialRoomId || '');
@@ -15,15 +23,30 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
   const userId = userProfile?.id;
   const nickname = userProfile?.nickname || '';
 
-  // RTDB Listener for the active room
+  // 방 입장 시 서버-클라이언트 시계 차이 사전 측정 (방법 A)
+  useEffect(() => {
+    if (roomId) {
+      measureClockOffset().catch(console.warn);
+    }
+  }, [roomId]);
+
+  // RTDB Listener for the active room (Web & Discord Activity compliant)
   useEffect(() => {
     if (!roomId) return;
 
-    const roomRef = ref(rtdb, `rooms/${roomId}`);
-    const unsubscribe = onValue(roomRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        
+    let timeoutTimer = setTimeout(() => {
+      setRoomData((current) => {
+        if (!current) {
+          setRoomId('');
+          setError('방 정보를 불러오지 못했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.');
+        }
+        return current;
+      });
+    }, 7000);
+
+    const unsubscribe = subscribeRoom(roomId, (data) => {
+      if (data) {
+        clearTimeout(timeoutTimer);
         // 내가 방에서 강퇴당했거나 데이터가 사라진 경우 처리
         if (!data.players || !data.players[userId]) {
           setRoomId('');
@@ -39,15 +62,19 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
           onGameStart(roomId, data.seed);
         }
       } else {
+        clearTimeout(timeoutTimer);
         // Room was deleted or we were kicked
         setRoomId('');
         setRoomData(null);
         setError('방이 종료되었거나 존재하지 않습니다.');
       }
-    });
+    }, 600);
 
-    return () => unsubscribe();
-  }, [roomId, onGameStart]);
+    return () => {
+      clearTimeout(timeoutTimer);
+      unsubscribe();
+    };
+  }, [roomId, onGameStart, userId]);
 
   // 15초 타임아웃 킥(Kick) 로직
   useEffect(() => {
@@ -57,10 +84,9 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
 
     const checkTimeout = async () => {
       try {
-        const snapshot = await get(ref(rtdb, `rooms/${roomId}/players`));
-        if (snapshot.exists()) {
-          const latestPlayers = snapshot.val();
-          const replayIds = Object.keys(latestPlayers).filter(id => latestPlayers[id].wantsReplay);
+        const latestPlayers = await getRoomPlayers(roomId);
+        if (latestPlayers && Object.keys(latestPlayers).length > 0) {
+          const replayIds = Object.keys(latestPlayers).filter(id => latestPlayers[id]?.wantsReplay);
           replayIds.sort();
 
           // 중복 호출 방지를 위해 다시하기를 누른 첫 번째 유저가 강퇴 처리
@@ -68,7 +94,7 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
             Object.keys(latestPlayers).forEach(id => {
               const p = latestPlayers[id];
               // 아직 결정을 안 내렸거나 남아있는 경우
-              if (p.finishedAt && !p.wantsReplay) {
+              if (p?.finishedAt && !p?.wantsReplay) {
                 leaveRoom(roomId, id);
               }
             });
@@ -109,7 +135,9 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
     setIsLoading(true);
     setError('');
     try {
-      const newRoomId = await createRoom(userId, nickname);
+      const activeUserId = userId || localStorage.getItem('arrow_game_device_id') || ('user_' + Math.random().toString(36).substring(2, 9));
+      const activeNickname = nickname || localStorage.getItem('arrow_game_nickname') || '게스트';
+      const newRoomId = await createRoom(activeUserId, activeNickname);
       setRoomId(newRoomId);
     } catch (e) {
       console.error('Room creation error:', e);

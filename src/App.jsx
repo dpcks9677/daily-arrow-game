@@ -132,17 +132,45 @@ function App() {
         // 2. 디스코드 계정으로 로그인되어 있다면 Firestore에서 기존 연동 기록 조회
         let remoteDiscordData = null;
         if (activeDiscordUser) {
-          try {
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('discordId', '==', activeDiscordUser.id));
-            const querySnap = await getDocs(q);
-            if (!querySnap.empty) {
-              const docs = querySnap.docs.map(d => d.data());
-              docs.sort((a, b) => (b.totalPlayCount || 0) - (a.totalPlayCount || 0));
-              remoteDiscordData = docs[0];
+          // 2-1. Worker Proxy를 통한 프로필 조회 (Discord Activity CSP 안전)
+          const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
+          const candidateProfileEndpoints = [
+            `/api/user-profile?discordId=${activeDiscordUser.id}`,
+            `/.proxy/api/user-profile?discordId=${activeDiscordUser.id}`,
+            baseAuthUrl ? `${baseAuthUrl}/api/user-profile?discordId=${activeDiscordUser.id}` : null,
+          ].filter(Boolean);
+
+          for (const ep of candidateProfileEndpoints) {
+            try {
+              const pRes = await fetch(ep);
+              const cType = pRes.headers.get('content-type') || '';
+              if (cType.includes('application/json')) {
+                const pData = await pRes.json();
+                if (pData.success && pData.profile) {
+                  remoteDiscordData = pData.profile;
+                  console.log("[Discord Activity] Successfully loaded user profile via Worker Proxy:", remoteDiscordData);
+                  break;
+                }
+              }
+            } catch (pErr) {
+              // 다음 엔드포인트 시도
             }
-          } catch (e) {
-            console.error("Failed to query user by discordId:", e);
+          }
+
+          // 2-2. 프록시 실패 시 (웹 브라우저 등) Firestore SDK 직접 쿼리
+          if (!remoteDiscordData) {
+            try {
+              const usersRef = collection(db, 'users');
+              const q = query(usersRef, where('discordId', '==', activeDiscordUser.id));
+              const querySnap = await getDocs(q);
+              if (!querySnap.empty) {
+                const docs = querySnap.docs.map(d => d.data());
+                docs.sort((a, b) => (b.totalPlayCount || 0) - (a.totalPlayCount || 0));
+                remoteDiscordData = docs[0];
+              }
+            } catch (e) {
+              console.error("Failed to query user by discordId:", e);
+            }
           }
         }
 
@@ -151,9 +179,10 @@ function App() {
           const baseData = remoteDiscordData || localData || {};
           const discordNickname = activeDiscordUser.global_name || activeDiscordUser.username;
           const discordAvatar = getDiscordAvatarUrl(activeDiscordUser);
+          const canonicalId = baseData.id || deviceId;
 
           const mergedProfile = {
-            id: deviceId,
+            id: canonicalId,
             discordId: activeDiscordUser.id,
             discordUsername: activeDiscordUser.username,
             discordGlobalName: activeDiscordUser.global_name,
@@ -179,7 +208,23 @@ function App() {
 
           setUserProfile(mergedProfile);
           saveSecureProfile(mergedProfile);
-          setDoc(userRef, mergedProfile, { merge: true }).catch(e => console.error("Firestore sync error:", e));
+
+          // 동기화 저장
+          if (isDiscordActivity()) {
+            const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
+            const epList = ['/api/user-profile', '/.proxy/api/user-profile', baseAuthUrl ? `${baseAuthUrl}/api/user-profile` : null].filter(Boolean);
+            for (const ep of epList) {
+              try {
+                const r = await fetch(ep, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id: canonicalId, profile: mergedProfile })
+                });
+                if (r.ok) break;
+              } catch (e) {}
+            }
+          }
+          setDoc(doc(db, 'users', canonicalId), mergedProfile, { merge: true }).catch(e => console.error("Firestore sync error:", e));
         } else {
           // 게스트 / 익명 로그인 로직
           const fetchAndMerge = async (fallbackProfile) => {
@@ -264,6 +309,20 @@ function App() {
     setUserProfile(newProfile);
     saveSecureProfile(newProfile);
     if (newProfile.backupCode || newProfile.discordId) {
+      if (isDiscordActivity()) {
+        const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
+        const epList = ['/api/user-profile', '/.proxy/api/user-profile', baseAuthUrl ? `${baseAuthUrl}/api/user-profile` : null].filter(Boolean);
+        for (const ep of epList) {
+          try {
+            const r = await fetch(ep, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: newProfile.id, profile: updates })
+            });
+            if (r.ok) break;
+          } catch (e) {}
+        }
+      }
       setDoc(doc(db, 'users', newProfile.id), updates, { merge: true }).catch(e => console.error("DB Sync error:", e));
     }
   };

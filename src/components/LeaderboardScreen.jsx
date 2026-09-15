@@ -11,16 +11,46 @@ export default function LeaderboardScreen({ onHome }) {
     const fetchLeaderboard = async () => {
       try {
         const dailySeed = getDailySeed().toString();
-        const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
-        // 시간 오름차순 (가장 짧은 시간이 1등) 정렬
-        const q = query(scoresRef, orderBy('time', 'asc'), limit(50));
-        const snapshot = await getDocs(q);
-        
-        const fetchedScores = [];
-        let rank = 1;
-        snapshot.forEach((doc) => {
-          fetchedScores.push({ id: doc.id, rank: rank++, ...doc.data() });
-        });
+        let fetchedScores = [];
+        let proxySuccess = false;
+
+        // 1. 디스코드 액티비티 환경이거나 Firestore 직접 통신이 차단된 경우를 위해 Worker Proxy 우선 시도
+        const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
+        const candidateEndpoints = [
+          `/api/leaderboard?seed=${dailySeed}`,
+          `/.proxy/api/leaderboard?seed=${dailySeed}`,
+          baseAuthUrl ? `${baseAuthUrl}/api/leaderboard?seed=${dailySeed}` : null,
+        ].filter(Boolean);
+
+        for (const ep of candidateEndpoints) {
+          try {
+            const res = await fetch(ep);
+            const cType = res.headers.get('content-type') || '';
+            if (cType.includes('application/json')) {
+              const data = await res.json();
+              if (data.success && Array.isArray(data.scores)) {
+                fetchedScores = data.scores;
+                proxySuccess = true;
+                break;
+              }
+            }
+          } catch (e) {
+            // 다음 엔드포인트 시도
+          }
+        }
+
+        // 2. 프록시 실패 시 (또는 일반 웹 브라우저 환경) Firestore SDK 직접 조회
+        if (!proxySuccess) {
+          const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
+          const q = query(scoresRef, orderBy('time', 'asc'), limit(50));
+          const snapshot = await getDocs(q);
+          
+          let rank = 1;
+          snapshot.forEach((doc) => {
+            fetchedScores.push({ id: doc.id, rank: rank++, ...doc.data() });
+          });
+        }
+
         setScores(fetchedScores);
       } catch (e) {
         console.error("Error fetching leaderboard:", e);

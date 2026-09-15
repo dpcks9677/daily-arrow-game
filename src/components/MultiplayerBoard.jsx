@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Unplug } from 'lucide-react';
 
 export default function MultiplayerBoard({ roomData, myUserId }) {
@@ -29,16 +29,49 @@ export default function MultiplayerBoard({ roomData, myUserId }) {
 
 function MiniBoard({ player }) {
   const [isShaking, setIsShaking] = useState(false);
+  const [displayProgress, setDisplayProgress] = useState(player.progress || 0);
+  const animRef = useRef(null);
+  const targetRef = useRef(player.progress || 0);
 
   useEffect(() => {
     if (player.shake && player.shake > 0) {
       setIsShaking(true);
-      const timer = setTimeout(() => setIsShaking(false), 300); // 300ms shake
+      const timer = setTimeout(() => setIsShaking(false), 300);
       return () => clearTimeout(timer);
     }
   }, [player.shake]);
 
-  const progress = player.progress || 0;
+  // 진행도 보간 애니메이션 (방법 B)
+  // 서버에서 progress가 급격히 증가해도 한 칸씩 빠르게 채워지는 애니메이션 재생
+  useEffect(() => {
+    const newTarget = player.progress || 0;
+    targetRef.current = newTarget;
+
+    // 이미 목표에 도달했거나, 애니메이션이 이미 실행 중이면 패스
+    if (animRef.current) return;
+
+    const animate = () => {
+      setDisplayProgress(prev => {
+        if (prev >= targetRef.current) {
+          animRef.current = null;
+          return targetRef.current;
+        }
+        // 다음 프레임에서 계속 채움
+        animRef.current = requestAnimationFrame(animate);
+        return prev + 1;
+      });
+    };
+    animRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+    };
+  }, [player.progress]);
+
+  const progress = displayProgress;
   const isDisconnected = player.isDisconnected;
   const isFinished = player.finishedAt !== null;
 

@@ -175,17 +175,19 @@ export default function StartScreen({
         </div>
 
         <div className="icon-group">
-          {!discordUser && !isActivity && (
+          {/* 1. 게임 도움말 (맨 왼쪽) */}
+          <div className="custom-tooltip-wrapper">
             <button
-              className="discord-header-btn"
-              onClick={onDiscordLogin}
-              title="Discord 계정으로 로그인하여 기록을 영구 보존하세요"
+              className="icon-btn"
+              onClick={() => setShowHelp(true)}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
             >
-              <DiscordIcon size={16} />
-              <span>Discord 로그인</span>
+              <HelpCircle size={24} />
             </button>
-          )}
+            <span className="custom-tooltip">게임 도움말</span>
+          </div>
 
+          {/* 2. 도전과제 */}
           {!isProfileRegistered ? (
             <div className="custom-tooltip-wrapper">
               <button
@@ -227,6 +229,7 @@ export default function StartScreen({
             </div>
           )}
 
+          {/* 3. 통계 */}
           {!isProfileRegistered ? (
             <div className="custom-tooltip-wrapper">
               <button
@@ -268,6 +271,31 @@ export default function StartScreen({
             </div>
           )}
 
+          {/* 4. 다크/라이트 테마 */}
+          <div className="custom-tooltip-wrapper">
+            <button
+              className="icon-btn"
+              onClick={toggleTheme}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+            </button>
+            <span className="custom-tooltip">{isDarkMode ? '라이트 테마' : '다크 테마'}</span>
+          </div>
+
+          {/* 5. Discord 로그인 버튼 (비로그인 시) */}
+          {!discordUser && !isActivity && (
+            <button
+              className="discord-header-btn"
+              onClick={onDiscordLogin}
+              title="Discord 계정으로 로그인하여 기록을 영구 보존하세요"
+            >
+              <DiscordIcon size={16} />
+              <span>Discord 로그인</span>
+            </button>
+          )}
+
+          {/* 6. 내 프로필 (맨 오른쪽) */}
           <div className="custom-tooltip-wrapper">
             <button
               className={`icon-btn ${discordUser ? 'discord-avatar-btn' : ''}`}
@@ -304,28 +332,6 @@ export default function StartScreen({
               )}
             </button>
             <span className="custom-tooltip">{discordUser ? `${userProfile?.nickname || '프로필'} (Discord 연동됨)` : '내 프로필 (Discord 미연동)'}</span>
-          </div>
-
-          <div className="custom-tooltip-wrapper">
-            <button
-              className="icon-btn"
-              onClick={toggleTheme}
-              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-            >
-              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-            </button>
-            <span className="custom-tooltip">{isDarkMode ? '라이트 테마' : '다크 테마'}</span>
-          </div>
-
-          <div className="custom-tooltip-wrapper">
-            <button
-              className="icon-btn"
-              onClick={() => setShowHelp(true)}
-              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-            >
-              <HelpCircle size={24} />
-            </button>
-            <span className="custom-tooltip">게임 도움말</span>
           </div>
         </div>
       </div>
@@ -589,12 +595,12 @@ export default function StartScreen({
 
             {/* Pagination Arrows */}
             {statsPage > 0 && (
-              <button onClick={() => setStatsPage(p => p - 1)} style={{ position: 'absolute', left: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+              <button className="stat-nav-btn" onClick={() => setStatsPage(p => p - 1)} style={{ left: '15px' }}>
                 <LucideLeft size={24} />
               </button>
             )}
             {statsPage < 2 && (
-              <button onClick={() => setStatsPage(p => p + 1)} style={{ position: 'absolute', right: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+              <button className="stat-nav-btn" onClick={() => setStatsPage(p => p + 1)} style={{ right: '15px' }}>
                 <LucideRight size={24} />
               </button>
             )}
@@ -757,7 +763,7 @@ export default function StartScreen({
                           const customStyle = getGrassStyle(count);
                           const tooltip = `${dateStr} : ${count}판`;
                           cells.push(
-                            <div key={dateStr} title={tooltip} style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', ...customStyle }} />
+                            <div key={dateStr} title={tooltip} className={(!count || count === 0) ? "grass-cell-empty" : ""} style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', ...customStyle }} />
                           );
                         }
 
@@ -815,7 +821,7 @@ export default function StartScreen({
                             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.4rem', marginTop: '0', fontSize: '0.75rem', color: '#94a3b8' }}>
                               <span>Less</span>
                               <div style={{ display: 'flex', gap: '4px' }}>
-                                <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }} />
+                                <div className="grass-cell-empty" style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }} />
                                 <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#065f46' }} />
                                 <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#059669' }} />
                                 <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#10b981' }} />
@@ -862,7 +868,7 @@ export default function StartScreen({
 
                           return [header, ...list.map((item, idx) => (
                             <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
-                              <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-', '.')}</span>
+                              <span className="stat-highlight" style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-', '.')}</span>
                               <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
                                 <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayPlayCount || 0}회</span>
                                 <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
@@ -994,7 +1000,7 @@ export default function StartScreen({
                     {showLegacyBackup ? '▲ 과거 백업 코드 가져오기 닫기' : '▼ 과거 백업 코드로 데이터 가져오기'}
                   </button>
                   {showLegacyBackup && (
-                    <div style={{ marginTop: '0.8rem', background: 'rgba(30, 58, 138, 0.25)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                    <div className="legacy-backup-box" style={{ marginTop: '0.8rem', background: 'rgba(30, 58, 138, 0.25)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
                       <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: '0 0 0.5rem 0', textAlign: 'center', lineHeight: '1.4' }}>
                         이전에 발급받은 8자리 백업 코드가 있다면 입력하여<br />기존 스트릭과 기록을 불러옵니다.
                       </p>

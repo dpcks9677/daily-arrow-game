@@ -439,6 +439,9 @@ h2, h3 {
 
 
 body.light-mode {
+  --bg-color: #f8fafc;
+  --text-color: #0f172a;
+  --border-color: #e2e8f0;
   background: radial-gradient(circle at top, #f5f3ff 0%, #ede9fe 100%);
   color: #0f172a;
   color-scheme: light;
@@ -513,14 +516,16 @@ body.light-mode .arrow-box.error {
   background: rgba(239, 68, 68, 0.2);
 }
 body.light-mode .modal-overlay {
-  background: rgba(237, 233, 254, 0.7);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 body.light-mode .modal {
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 body.light-mode .modal h2 {
   color: #0f172a;
@@ -529,45 +534,48 @@ body.light-mode .modal p {
   color: #334155;
 }
 body.light-mode .close-btn {
-  color: #475569;
+  color: #64748b;
 }
 body.light-mode .close-btn:hover {
   color: #0f172a;
 }
 body.light-mode .leaderboard-container {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
 }
 body.light-mode .leaderboard-table th {
-  color: #475569;
+  color: #64748b;
 }
 body.light-mode .leaderboard-table th, body.light-mode .leaderboard-table td {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid #f1f5f9;
 }
 body.light-mode .leaderboard-table tbody tr:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: #f1f5f9;
 }
 body.light-mode .nickname-section {
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-top: 1px solid #e2e8f0;
 }
 body.light-mode .nickname-input {
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
   color: #0f172a;
 }
+body.light-mode .nickname-input:focus {
+  border-color: #3b82f6;
+}
 body.light-mode .leaderboard-container::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+  background: #f1f5f9;
 }
 body.light-mode .leaderboard-container::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: #cbd5e1;
 }
 body.light-mode .leaderboard-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: #94a3b8;
 }
 body.light-mode .modal-info-box {
-  background: rgba(139, 92, 246, 0.1) !important;
+  background: #f8fafc !important;
   color: #334155 !important;
-  border-color: rgba(139, 92, 246, 0.25) !important;
+  border-color: #e2e8f0 !important;
 }
 .custom-tooltip-wrapper {
   position: relative;
@@ -623,8 +631,8 @@ body.light-mode .modal-info-box .stat-empty {
 }
 
 body.light-mode .inner-box {
-  background: rgba(255, 255, 255, 0.6) !important;
-  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
@@ -636,7 +644,51 @@ body.light-mode .ach-desc {
 }
 
 body.light-mode .nickname-section {
-  border-top: 1px solid rgba(0, 0, 0, 0.15) !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+.stat-nav-btn {
+  position: absolute;
+  top: 55%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f8fafc;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  transition: all 0.2s;
+}
+.stat-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+body.light-mode .stat-nav-btn {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+body.light-mode .stat-nav-btn:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+body.light-mode .legacy-backup-box {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+body.light-mode .legacy-backup-box p {
+  color: #475569 !important;
+}
+
+body.light-mode .grass-cell-empty {
+  background-color: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
 }
 
 /* Flame Animation */

@@ -1,5 +1,77 @@
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-Thin.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-ExtraLight.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-Light.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-Medium.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-SemiBold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-Bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-ExtraBold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'SUIT';
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  src: url('./assets/fonts/SUIT-Heavy.ttf') format('truetype');
+}
+
 :root {
-  --font-main: 'Pretendard Variable', Pretendard, system-ui, -apple-system, sans-serif;
+  --font-main: 'SUIT', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
   --font-title: var(--font-main);
   font-family: var(--font-main);
   line-height: 1.5;
@@ -7,6 +79,9 @@
   color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #0f172a;
+  --bg-color: #1e293b;
+  --text-color: #f8fafc;
+  --border-color: rgba(255, 255, 255, 0.1);
 }
 
 body {
