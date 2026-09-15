@@ -57,6 +57,81 @@ export async function createRoom(hostUserId, hostNickname) {
   return roomId;
 }
 
+// 디스코드 음성 채널 전용 자동 방 생성/입장 (Host/Guest 구분 없이 원클릭 집결)
+export async function getOrCreateVoiceChannelRoom(channelId, userId, nickname) {
+  if (!channelId) throw new Error('음성 채널 정보가 없습니다.');
+  // 채널 ID 기반 고유 방 코드 (알파벳+숫자 6~10자리)
+  const safeChannel = channelId.replace(/[^a-zA-Z0-9]/g, '');
+  const roomId = `VC${safeChannel.slice(-6).toUpperCase()}`;
+  const roomRef = ref(rtdb, `rooms/${roomId}`);
+  const snapshot = await get(roomRef);
+
+  const finalNickname = nickname || 'Player';
+
+  if (!snapshot.exists() || snapshot.val().status === 'finished') {
+    // 새 방 개설
+    const randomSeed = Math.random().toString(36).substring(2, 10);
+    const roomData = {
+      host: userId,
+      status: 'waiting',
+      seed: randomSeed,
+      isDiscordVoiceRoom: true,
+      channelId: channelId,
+      createdAt: Date.now(),
+      players: {
+        [userId]: {
+          nickname: finalNickname,
+          isReady: true,
+          progress: 0,
+          mistakes: 0,
+          shake: 0,
+          finishedAt: null,
+          finalTime: null,
+          rank: null,
+          isDisconnected: false
+        }
+      }
+    };
+    await set(roomRef, roomData);
+    const playerRef = ref(rtdb, `rooms/${roomId}/players/${userId}`);
+    onDisconnect(playerRef).update({ isDisconnected: true });
+    return roomId;
+  } else {
+    // 기존 방 참가
+    const roomData = snapshot.val();
+    const players = roomData.players || {};
+
+    if (players[userId]) {
+      return roomId;
+    }
+
+    if (roomData.status !== 'waiting') {
+      throw new Error('음성 통화방에서 이미 게임이 진행 중입니다. 라운드가 끝난 후 입장해 주세요.');
+    }
+
+    if (Object.keys(players).length >= 4) {
+      throw new Error('방 정원(최대 4명)이 가득 찼습니다.');
+    }
+
+    const newPlayerData = {
+      nickname: finalNickname,
+      isReady: false,
+      progress: 0,
+      mistakes: 0,
+      shake: 0,
+      finishedAt: null,
+      finalTime: null,
+      rank: null,
+      isDisconnected: false
+    };
+
+    const playerRef = ref(rtdb, `rooms/${roomId}/players/${userId}`);
+    await set(playerRef, newPlayerData);
+    onDisconnect(playerRef).update({ isDisconnected: true });
+    return roomId;
+  }
+}
+
 // 방 입장 (Guest)
 export async function joinRoom(roomId, userId, nickname) {
   const roomRef = ref(rtdb, `rooms/${roomId}`);

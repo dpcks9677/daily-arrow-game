@@ -10,6 +10,7 @@ import {
   clearStoredDiscordUser, 
   getDiscordAvatarUrl 
 } from './discordAuth';
+import { isDiscordActivity, initDiscordActivity } from './discordActivity';
 
 import StartScreen from './components/StartScreen';
 import GameScreen from './components/GameScreen';
@@ -33,6 +34,8 @@ function App() {
     return localData || null;
   });
   const [discordUser, setDiscordUser] = useState(() => getStoredDiscordUser());
+  const [isActivity, setIsActivity] = useState(() => isDiscordActivity());
+  const [channelId, setChannelId] = useState(null);
   const [unlockedPopups, setUnlockedPopups] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
@@ -65,21 +68,36 @@ function App() {
         const deviceId = userCredential.user.uid;
         const todayStr = getKSTDateString();
 
-        // 1. URL에 OAuth code가 있는지 확인 (?code=xxxx)
-        const params = new URLSearchParams(window.location.search);
-        const authCode = params.get('code');
-        let activeDiscordUser = getStoredDiscordUser();
+        let activeDiscordUser = null;
 
-        if (authCode) {
-          // 주소창에서 ?code 파라미터를 깔끔하게 제거
-          window.history.replaceState({}, document.title, window.location.pathname);
+        // 1. 디스코드 액티비티 환경인지 확인 (임베디드 iframe)
+        if (isDiscordActivity()) {
           try {
-            activeDiscordUser = await exchangeDiscordCode(authCode);
+            setIsActivity(true);
+            const activityResult = await initDiscordActivity();
+            activeDiscordUser = activityResult.discordUser;
+            setChannelId(activityResult.channelId);
             saveStoredDiscordUser(activeDiscordUser);
             setDiscordUser(activeDiscordUser);
-          } catch (oauthErr) {
-            console.error("Discord OAuth code exchange failed:", oauthErr);
-            alert("디스코드 로그인 실패: " + oauthErr.message);
+          } catch (actErr) {
+            console.error("Discord Activity initialization error:", actErr);
+          }
+        } else {
+          // 2. 일반 웹 브라우저 OAuth code 확인 (?code=xxxx)
+          const params = new URLSearchParams(window.location.search);
+          const authCode = params.get('code');
+          activeDiscordUser = getStoredDiscordUser();
+
+          if (authCode) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            try {
+              activeDiscordUser = await exchangeDiscordCode(authCode);
+              saveStoredDiscordUser(activeDiscordUser);
+              setDiscordUser(activeDiscordUser);
+            } catch (oauthErr) {
+              console.error("Discord OAuth code exchange failed:", oauthErr);
+              alert("디스코드 로그인 실패: " + oauthErr.message);
+            }
           }
         }
 
@@ -94,7 +112,9 @@ function App() {
             const q = query(usersRef, where('discordId', '==', activeDiscordUser.id));
             const querySnap = await getDocs(q);
             if (!querySnap.empty) {
-              remoteDiscordData = querySnap.docs[0].data();
+              const docs = querySnap.docs.map(d => d.data());
+              docs.sort((a, b) => (b.totalPlayCount || 0) - (a.totalPlayCount || 0));
+              remoteDiscordData = docs[0];
             }
           } catch (e) {
             console.error("Failed to query user by discordId:", e);
@@ -259,13 +279,14 @@ function App() {
           setUnlockedPopups={setUnlockedPopups} 
           isAuthLoading={isAuthLoading}
           discordUser={discordUser}
+          isActivity={isActivity}
           onDiscordLogin={handleDiscordLogin}
           onDiscordLogout={handleDiscordLogout}
         />
       )}
       {currentScreen === 'game' && !multiplayerData && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
       {currentScreen === 'game' && multiplayerData && <MultiplayerGameScreen onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} onReplay={() => setCurrentScreen('multiplayer')} userProfile={userProfile} multiplayerData={multiplayerData} saveProfile={saveProfile} />}
-      {currentScreen === 'multiplayer' && <MultiplayerLobby onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} initialRoomId={multiplayerData?.roomId} onGameStart={(roomId, seed) => { setMultiplayerData({ roomId, seed }); setCurrentScreen('game'); }} userProfile={userProfile} />}
+      {currentScreen === 'multiplayer' && <MultiplayerLobby onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} initialRoomId={multiplayerData?.roomId} onGameStart={(roomId, seed) => { setMultiplayerData({ roomId, seed }); setCurrentScreen('game'); }} userProfile={userProfile} isActivity={isActivity} channelId={channelId} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>
   )

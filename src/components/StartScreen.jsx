@@ -18,6 +18,7 @@ export default function StartScreen({
   setUnlockedPopups, 
   isAuthLoading,
   discordUser,
+  isActivity,
   onDiscordLogin,
   onDiscordLogout 
 }) {
@@ -168,7 +169,7 @@ const [showHelp, setShowHelp] = useState(false);
         </div>
 
         <div className="icon-group">
-          {!discordUser && (
+          {!discordUser && !isActivity && (
             <button 
               className="discord-header-btn"
               onClick={onDiscordLogin}
@@ -906,10 +907,16 @@ const [showHelp, setShowHelp] = useState(false);
                           <span>Discord 연동 계정</span>
                         </div>
                       </div>
-                      <button onClick={onDiscordLogout} className="discord-unlink-btn" title="계정 연동 해제">
-                        <LogOut size={15} />
-                        <span>해제</span>
-                      </button>
+                      {isActivity ? (
+                        <div style={{ fontSize: '0.75rem', color: '#5865F2', background: 'rgba(88, 101, 242, 0.15)', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>
+                          Activity
+                        </div>
+                      ) : (
+                        <button onClick={onDiscordLogout} className="discord-unlink-btn" title="계정 연동 해제">
+                          <LogOut size={15} />
+                          <span>해제</span>
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="discord-connect-card">

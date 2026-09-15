@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Users, LogOut, Play, UserPlus, CheckCircle, Circle, Copy } from 'lucide-react';
+import { Users, LogOut, Play, UserPlus, CheckCircle, Circle, Copy, Volume2 } from 'lucide-react';
 import { ref, onValue, get } from 'firebase/database';
 import { rtdb } from '../firebase';
-import { createRoom, joinRoom, leaveRoom, toggleReady, startGame } from '../multiplayerUtils';
+import { createRoom, joinRoom, leaveRoom, toggleReady, startGame, getOrCreateVoiceChannelRoom } from '../multiplayerUtils';
 
-export default function MultiplayerLobby({ onHome, onGameStart, userProfile, initialRoomId }) {
+export default function MultiplayerLobby({ onHome, onGameStart, userProfile, initialRoomId, isActivity, channelId }) {
   const [roomId, setRoomId] = useState(initialRoomId || '');
   const [inputCode, setInputCode] = useState('');
   const [roomData, setRoomData] = useState(null);
@@ -90,6 +90,21 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
     }
   }, [roomData?.replayStartedAt, roomData?.status, roomId, userId]);
 
+  const handleJoinVoiceChannelRoom = async () => {
+    if (!channelId) return;
+    setIsLoading(true);
+    setError('');
+    try {
+      const vRoomId = await getOrCreateVoiceChannelRoom(channelId, userId, nickname);
+      setRoomId(vRoomId);
+    } catch (e) {
+      console.error('Voice channel room error:', e);
+      setError(e.message || '음성 채널 방 입장 실패');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleCreateRoom = async () => {
     setIsLoading(true);
     setError('');
@@ -157,7 +172,34 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
           <h2 style={{ fontSize: '1.8rem', marginBottom: '25px' }}>멀티플레이 입장</h2>
           
           <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '40px 20px', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '80%', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '85%', alignItems: 'center' }}>
+              {isActivity && channelId && (
+                <>
+                  <button 
+                    className="primary-btn" 
+                    onClick={handleJoinVoiceChannelRoom}
+                    disabled={isEntering}
+                    style={{ 
+                      width: '100%', 
+                      padding: '15px', 
+                      background: 'linear-gradient(135deg, #5865F2, #4752C4)',
+                      boxShadow: '0 4px 14px rgba(88, 101, 242, 0.4)',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Volume2 size={20} />
+                    음성 통화방 친구들과 함께하기
+                  </button>
+                  <div style={{ textAlign: 'center', color: 'var(--text-color)', opacity: 0.5, fontSize: '0.85rem' }}>
+                    또는 직접 방 만들기 / 코드 입력
+                  </div>
+                </>
+              )}
+
               <button 
                 className="primary-btn" 
                 onClick={handleCreateRoom}
@@ -168,7 +210,7 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
                 방 만들기 (Host)
               </button>
 
-              <div style={{ textAlign: 'center', color: 'var(--text-color)', opacity: 0.5, margin: '15px 0' }}>
+              <div style={{ textAlign: 'center', color: 'var(--text-color)', opacity: 0.5, margin: '10px 0' }}>
                 또는 코드로 입장하기
               </div>
 
