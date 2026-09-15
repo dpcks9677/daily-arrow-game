@@ -169,16 +169,16 @@ const [showHelp, setShowHelp] = useState(false);
         </div>
 
         <div className="icon-group">
-          {!discordUser && !isActivity && (
+          <div className="custom-tooltip-wrapper">
             <button 
-              className="discord-header-btn"
-              onClick={onDiscordLogin}
-              title="Discord 계정으로 로그인하여 기록을 영구 보존하세요"
+              className="icon-btn"
+              onClick={() => setShowHelp(true)}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
             >
-              <DiscordIcon size={16} />
-              <span>Discord 로그인</span>
+              <HelpCircle size={24} />
             </button>
-          )}
+            <span className="custom-tooltip">게임 도움말</span>
+          </div>
 
           {!isProfileRegistered ? (
             <div className="custom-tooltip-wrapper">
@@ -264,6 +264,17 @@ const [showHelp, setShowHelp] = useState(false);
 
           <div className="custom-tooltip-wrapper">
             <button 
+              className="icon-btn"
+              onClick={toggleTheme}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+            </button>
+            <span className="custom-tooltip">{isDarkMode ? '라이트 테마' : '다크 테마'}</span>
+          </div>
+
+          <div className="custom-tooltip-wrapper">
+            <button 
               className={`icon-btn ${discordUser ? 'discord-avatar-btn' : ''}`}
               onClick={() => setShowProfile(true)}
               style={{ 
@@ -299,28 +310,17 @@ const [showHelp, setShowHelp] = useState(false);
             </button>
             <span className="custom-tooltip">{discordUser ? `${userProfile?.nickname || '프로필'} (Discord 연동됨)` : '내 프로필 (Discord 미연동)'}</span>
           </div>
-          
-          <div className="custom-tooltip-wrapper">
+
+          {!discordUser && !isActivity && (
             <button 
-              className="icon-btn"
-              onClick={toggleTheme}
-              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+              className="discord-header-btn"
+              onClick={onDiscordLogin}
+              title="Discord 계정으로 로그인하여 기록을 영구 보존하세요"
             >
-              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+              <DiscordIcon size={16} />
+              <span>Discord 로그인</span>
             </button>
-            <span className="custom-tooltip">{isDarkMode ? '라이트 테마' : '다크 테마'}</span>
-          </div>
-          
-          <div className="custom-tooltip-wrapper">
-            <button 
-              className="icon-btn"
-              onClick={() => setShowHelp(true)}
-              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-            >
-              <HelpCircle size={24} />
-            </button>
-            <span className="custom-tooltip">게임 도움말</span>
-          </div>
+          )}
         </div>
       </div>
       <h1 className="main-title">
