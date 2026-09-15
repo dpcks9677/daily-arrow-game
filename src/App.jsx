@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db, auth, doc, setDoc, getDoc, collection, query, where, getDocs } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { loadSecureProfile, saveSecureProfile, getKSTDateString } from './utils';
@@ -38,6 +38,19 @@ function App() {
   const [channelId, setChannelId] = useState(null);
   const [unlockedPopups, setUnlockedPopups] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((message, type = 'info') => {
+    setToast({ id: Date.now(), message, type });
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setToast(null);
+    }, 2800);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -96,7 +109,7 @@ function App() {
               setDiscordUser(activeDiscordUser);
             } catch (oauthErr) {
               console.error("Discord OAuth code exchange failed:", oauthErr);
-              alert("디스코드 로그인 실패: " + oauthErr.message);
+              showToast("디스코드 로그인 실패: " + oauthErr.message, "error");
             }
           }
         }
@@ -207,7 +220,7 @@ function App() {
         }
       } catch (error) {
         console.error("Auth init failed:", error);
-        alert("인증에 실패했습니다. 파이어베이스 콘솔에서 익명 로그인을 활성화해주세요.");
+        showToast("인증에 실패했습니다. 네트워크 또는 파이어베이스 설정을 확인해주세요.", "error");
       } finally {
         setIsAuthLoading(false);
       }
@@ -227,7 +240,7 @@ function App() {
   const handleDiscordLogin = () => {
     const authUrl = getDiscordAuthUrl();
     if (!authUrl) {
-      alert("디스코드 연동 정보(VITE_DISCORD_CLIENT_ID)가 .env 파일에 설정되어 있지 않습니다.\n.env 파일을 확인해주세요.");
+      showToast("디스코드 연동 정보(VITE_DISCORD_CLIENT_ID)가 설정되어 있지 않습니다.", "error");
       return;
     }
     window.location.href = authUrl;
@@ -247,6 +260,7 @@ function App() {
       saveSecureProfile(updated);
       return updated;
     });
+    showToast("로그아웃되었습니다.", "info");
   };
 
   const toggleTheme = () => {
@@ -263,6 +277,11 @@ function App() {
 
   return (
     <div className="app-container">
+      {toast && (
+        <div key={toast.id} className={`in-game-toast toast-${toast.type}`}>
+          <span>{toast.message}</span>
+        </div>
+      )}
       {unlockedPopups.length > 0 && (
         <AchievementPopupContainer popups={unlockedPopups} setPopups={setUnlockedPopups} />
       )}
@@ -282,11 +301,41 @@ function App() {
           isActivity={isActivity}
           onDiscordLogin={handleDiscordLogin}
           onDiscordLogout={handleDiscordLogout}
+          showToast={showToast}
         />
       )}
-      {currentScreen === 'game' && !multiplayerData && <GameScreen onHome={() => setCurrentScreen('start')} onLeaderboard={() => setCurrentScreen('leaderboard')} userProfile={userProfile} setUserProfile={setUserProfile} saveProfile={saveProfile} setUnlockedPopups={setUnlockedPopups} />}
-      {currentScreen === 'game' && multiplayerData && <MultiplayerGameScreen onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} onReplay={() => setCurrentScreen('multiplayer')} userProfile={userProfile} multiplayerData={multiplayerData} saveProfile={saveProfile} />}
-      {currentScreen === 'multiplayer' && <MultiplayerLobby onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} initialRoomId={multiplayerData?.roomId} onGameStart={(roomId, seed) => { setMultiplayerData({ roomId, seed }); setCurrentScreen('game'); }} userProfile={userProfile} isActivity={isActivity} channelId={channelId} />}
+      {currentScreen === 'game' && !multiplayerData && (
+        <GameScreen 
+          onHome={() => setCurrentScreen('start')} 
+          onLeaderboard={() => setCurrentScreen('leaderboard')} 
+          userProfile={userProfile} 
+          setUserProfile={setUserProfile} 
+          saveProfile={saveProfile} 
+          setUnlockedPopups={setUnlockedPopups} 
+          showToast={showToast}
+        />
+      )}
+      {currentScreen === 'game' && multiplayerData && (
+        <MultiplayerGameScreen 
+          onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} 
+          onReplay={() => setCurrentScreen('multiplayer')} 
+          userProfile={userProfile} 
+          multiplayerData={multiplayerData} 
+          saveProfile={saveProfile} 
+          showToast={showToast}
+        />
+      )}
+      {currentScreen === 'multiplayer' && (
+        <MultiplayerLobby 
+          onHome={() => { setCurrentScreen('start'); setMultiplayerData(null); }} 
+          initialRoomId={multiplayerData?.roomId} 
+          onGameStart={(roomId, seed) => { setMultiplayerData({ roomId, seed }); setCurrentScreen('game'); }} 
+          userProfile={userProfile} 
+          isActivity={isActivity} 
+          channelId={channelId} 
+          showToast={showToast}
+        />
+      )}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onHome={() => setCurrentScreen('start')} />}
     </div>
   )

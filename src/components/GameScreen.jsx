@@ -6,7 +6,7 @@ import { generateDailyArrows, processGameCompletion, getDailySeed, getByteLength
 import { triggerConfetti } from '../utils';
 import MobileDPad from './MobileDPad';
 
-export default function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, saveProfile, setUnlockedPopups }) {
+export default function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, saveProfile, setUnlockedPopups, showToast }) {
   const [arrows, setArrows] = useState([]);
   
   const currentIndexRef = useRef(0);
@@ -163,13 +163,16 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
   const shareResult = () => {
     const timeSec = (timeElapsed / 1000).toFixed(2);
     const scoreText = mistakes === 0 ? '✨ Perfect Clear!' : `🎯 ${50 - mistakes}/50 (Mistakes: ${mistakes})`;
-    const text = `Daily Arrow\n⏱️ ${timeSec}초\n${scoreText}\nhttps://yourdomain.com`;
+    const text = `Daily Arrow\n⏱️ ${timeSec}초\n${scoreText}\nhttps://daily-arrow.web.app`;
     
-    navigator.clipboard.writeText(text).then(() => {
-        alert('결과가 클립보드에 복사되었습니다!');
-    }).catch(err => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        if (showToast) showToast('📋 결과가 클립보드에 복사되었습니다!', 'info');
+      }).catch(err => {
         console.error('Failed to copy', err);
-    });
+        if (showToast) showToast('클립보드 복사 권한이 없습니다.', 'error');
+      });
+    }
   }
 
   const handleNicknameChange = (e) => {
@@ -183,7 +186,11 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
   }
 
   const saveScore = async () => {
-    if (!nickname.trim()) return alert("닉네임을 입력해주세요!");
+    if (!nickname.trim()) {
+      setShowNicknameWarning(true);
+      if (showToast) showToast("닉네임을 입력해주세요!", "error");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const deviceId = userProfile.id;
@@ -224,11 +231,17 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
       if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
 
       setIsSaved(true);
-      alert("점수가 성공적으로 등록되었습니다!");
-      onLeaderboard();
+      if (showToast) {
+        showToast("🎉 점수가 성공적으로 등록되었습니다!", "success");
+      }
+      setTimeout(() => {
+        onLeaderboard();
+      }, 900);
     } catch (e) {
       console.error(e);
-      alert("등록에 실패했습니다.");
+      if (showToast) {
+        showToast("등록에 실패했습니다: " + (e.message || "다시 시도해주세요."), "error");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -312,7 +325,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
               <p>기록: {(timeElapsed / 1000).toFixed(2)}초</p>
               {mistakes > 0 && <p style={{ fontSize: '1rem', marginTop: '-1rem' }}>실수: {mistakes}회</p>}
               
-              {!isSaved && (
+              {!isSaved ? (
                 <div className="nickname-section">
                   <input 
                     type="text" 
@@ -327,6 +340,10 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
                   <button onClick={saveScore} disabled={isSubmitting || !nickname.trim()} className="primary-btn submit-btn">
                     {isSubmitting ? '등록 중...' : '점수 등록하기'}
                   </button>
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '10px', padding: '0.75rem 1rem', color: '#34d399', fontWeight: 'bold', margin: '1rem 0' }}>
+                  🎉 점수가 등록되었습니다! 잠시 후 리더보드로 이동합니다...
                 </div>
               )}
 

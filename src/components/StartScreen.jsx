@@ -6,24 +6,25 @@ import { getByteLength, saveSecureProfile, getKSTDate, getKSTDateString, process
 import { ACHIEVEMENTS } from '../constants';
 import { DiscordIcon } from '../discordAuth';
 
-export default function StartScreen({ 
-  onPlay, 
-  onMultiplayer, 
-  onLeaderboard, 
-  isDarkMode, 
-  toggleTheme, 
-  userProfile, 
-  setUserProfile, 
-  saveProfile, 
-  setUnlockedPopups, 
+export default function StartScreen({
+  onPlay,
+  onMultiplayer,
+  onLeaderboard,
+  isDarkMode,
+  toggleTheme,
+  userProfile,
+  setUserProfile,
+  saveProfile,
+  setUnlockedPopups,
   isAuthLoading,
   discordUser,
   isActivity,
   onDiscordLogin,
-  onDiscordLogout 
+  onDiscordLogout,
+  showToast
 }) {
 
-const [showHelp, setShowHelp] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
@@ -62,7 +63,7 @@ const [showHelp, setShowHelp] = useState(false);
   const handleEditNicknameChange = (e) => {
     const val = e.target.value;
     setEditNicknameValue(val);
-    
+
     const isValidChar = /^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9_. ]*$/.test(val);
     if (getByteLength(val) > 20) {
       setNicknameError("한글은 8글자까지, 영어는 20자까지 가능합니다");
@@ -96,27 +97,30 @@ const [showHelp, setShowHelp] = useState(false);
       setNicknameError('');
     } catch (e) {
       console.error(e);
-      alert("닉네임 저장에 실패했습니다.");
+      if (showToast) showToast("닉네임 저장에 실패했습니다.", "error");
     }
   };
 
   // 과거 백업 코드를 현재 계정(또는 디스코드 계정)으로 마이그레이션/복구
   const handleRecover = async () => {
-    if (!recoverCode.trim()) return alert("백업 코드를 입력해주세요.");
+    if (!recoverCode.trim()) {
+      if (showToast) showToast("백업 코드를 입력해주세요.", "error");
+      return;
+    }
     setIsRecovering(true);
     try {
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('backupCode', '==', recoverCode.trim().toUpperCase()));
       const querySnapshot = await getDocs(q);
-      
+
       if (querySnapshot.empty) {
-        alert("일치하는 계정을 찾을 수 없습니다. 코드를 확인해주세요.");
+        if (showToast) showToast("일치하는 계정을 찾을 수 없습니다. 코드를 확인해주세요.", "error");
       } else {
         const matchedDoc = querySnapshot.docs[0];
         const oldData = matchedDoc.data();
-        
+
         const deviceId = userProfile.id;
-        
+
         // 디스코드 계정이 연동되어 있다면 디스코드 식별 정보를 유지하면서 전적을 이전
         const discordFields = discordUser ? {
           discordId: userProfile.discordId || discordUser.id,
@@ -133,22 +137,24 @@ const [showHelp, setShowHelp] = useState(false);
 
         // Firestore에 현재 deviceId 문서로 저장
         await setDoc(doc(db, 'users', deviceId), mergedProfile, { merge: true });
-        
+
         setUserProfile(mergedProfile);
         saveSecureProfile(mergedProfile);
         if (mergedProfile.nickname) {
           localStorage.setItem('arrow_game_nickname', mergedProfile.nickname);
         }
-        
-        alert(discordUser 
-          ? "과거 백업 코드의 전적이 현재 Discord 계정으로 성공적으로 이전되었습니다!" 
-          : "계정 데이터가 성공적으로 복구되었습니다! 이제 Discord로 로그인하시면 백업 코드 없이도 언제 어디서든 기록이 안전하게 유지됩니다.");
+
+        if (showToast) {
+          showToast(discordUser
+            ? "과거 백업 코드의 전적이 현재 Discord 계정으로 성공적으로 이전되었습니다!"
+            : "계정 데이터가 성공적으로 복구되었습니다!", "success");
+        }
         setShowProfile(false);
         setRecoverCode('');
       }
     } catch (e) {
       console.error(e);
-      alert("복구 중 오류가 발생했습니다.");
+      if (showToast) showToast("복구 중 오류가 발생했습니다.", "error");
     } finally {
       setIsRecovering(false);
     }
@@ -160,7 +166,7 @@ const [showHelp, setShowHelp] = useState(false);
   return (
     <div className="start-screen">
       <div className="start-screen-header">
-        
+
         <div className="streak-container">
           <Flame size={32} color={isPlayedToday ? '#ef4444' : '#64748b'} fill={isPlayedToday ? '#f97316' : 'transparent'} className={isPlayedToday ? 'flame-burning' : ''} />
           <span className="streak-text" style={{ color: isPlayedToday ? '#f97316' : '#64748b' }}>
@@ -169,28 +175,28 @@ const [showHelp, setShowHelp] = useState(false);
         </div>
 
         <div className="icon-group">
-          <div className="custom-tooltip-wrapper">
-            <button 
-              className="icon-btn"
-              onClick={() => setShowHelp(true)}
-              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          {!discordUser && !isActivity && (
+            <button
+              className="discord-header-btn"
+              onClick={onDiscordLogin}
+              title="Discord 계정으로 로그인하여 기록을 영구 보존하세요"
             >
-              <HelpCircle size={24} />
+              <DiscordIcon size={16} />
+              <span>Discord 로그인</span>
             </button>
-            <span className="custom-tooltip">게임 도움말</span>
-          </div>
+          )}
 
           {!isProfileRegistered ? (
             <div className="custom-tooltip-wrapper">
-              <button 
+              <button
                 className="icon-btn"
-                style={{ 
-                  width: '40px', height: '40px', 
-                  background: 'rgba(255,255,255,0.1)', 
-                  border: '1px solid rgba(255,255,255,0.2)', 
-                  borderRadius: '8px', 
-                  color: '#475569', 
-                  cursor: 'default', 
+                style={{
+                  width: '40px', height: '40px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: '#475569',
+                  cursor: 'default',
                   display: 'flex', justifyContent: 'center', alignItems: 'center',
                   opacity: 0.4
                 }}
@@ -201,16 +207,16 @@ const [showHelp, setShowHelp] = useState(false);
             </div>
           ) : (
             <div className="custom-tooltip-wrapper">
-              <button 
+              <button
                 className="icon-btn"
                 onClick={() => setShowAchievements(true)}
-                style={{ 
-                  width: '40px', height: '40px', 
-                  background: 'rgba(255,255,255,0.1)', 
-                  border: '1px solid rgba(255,255,255,0.2)', 
-                  borderRadius: '8px', 
-                  color: '#cbd5e1', 
-                  cursor: 'pointer', 
+                style={{
+                  width: '40px', height: '40px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: '#cbd5e1',
+                  cursor: 'pointer',
                   display: 'flex', justifyContent: 'center', alignItems: 'center',
                   opacity: 1
                 }}
@@ -223,15 +229,15 @@ const [showHelp, setShowHelp] = useState(false);
 
           {!isProfileRegistered ? (
             <div className="custom-tooltip-wrapper">
-              <button 
+              <button
                 className="icon-btn"
-                style={{ 
-                  width: '40px', height: '40px', 
-                  background: 'rgba(255,255,255,0.1)', 
-                  border: '1px solid rgba(255,255,255,0.2)', 
-                  borderRadius: '8px', 
-                  color: '#475569', 
-                  cursor: 'default', 
+                style={{
+                  width: '40px', height: '40px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: '#475569',
+                  cursor: 'default',
                   display: 'flex', justifyContent: 'center', alignItems: 'center',
                   opacity: 0.4
                 }}
@@ -242,16 +248,16 @@ const [showHelp, setShowHelp] = useState(false);
             </div>
           ) : (
             <div className="custom-tooltip-wrapper">
-              <button 
+              <button
                 className="icon-btn"
                 onClick={() => setShowStatistics(true)}
-                style={{ 
-                  width: '40px', height: '40px', 
-                  background: 'rgba(255,255,255,0.1)', 
-                  border: '1px solid rgba(255,255,255,0.2)', 
-                  borderRadius: '8px', 
-                  color: '#cbd5e1', 
-                  cursor: 'pointer', 
+                style={{
+                  width: '40px', height: '40px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: '#cbd5e1',
+                  cursor: 'pointer',
                   display: 'flex', justifyContent: 'center', alignItems: 'center',
                   opacity: 1
                 }}
@@ -263,40 +269,29 @@ const [showHelp, setShowHelp] = useState(false);
           )}
 
           <div className="custom-tooltip-wrapper">
-            <button 
-              className="icon-btn"
-              onClick={toggleTheme}
-              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-            >
-              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-            </button>
-            <span className="custom-tooltip">{isDarkMode ? '라이트 테마' : '다크 테마'}</span>
-          </div>
-
-          <div className="custom-tooltip-wrapper">
-            <button 
+            <button
               className={`icon-btn ${discordUser ? 'discord-avatar-btn' : ''}`}
               onClick={() => setShowProfile(true)}
-              style={{ 
-                position: 'relative', 
-                width: '40px', 
-                height: '40px', 
-                background: discordUser ? 'rgba(88, 101, 242, 0.2)' : 'rgba(255,255,255,0.1)', 
-                border: discordUser ? '1.5px solid #5865F2' : '1px solid rgba(255,255,255,0.2)', 
-                borderRadius: '8px', 
-                color: '#cbd5e1', 
-                cursor: 'pointer', 
-                display: 'flex', 
-                justifyContent: 'center', 
+              style={{
+                position: 'relative',
+                width: '40px',
+                height: '40px',
+                background: discordUser ? 'rgba(88, 101, 242, 0.2)' : 'rgba(255,255,255,0.1)',
+                border: discordUser ? '1.5px solid #5865F2' : '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                color: '#cbd5e1',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'center',
                 alignItems: 'center',
                 padding: 0,
                 overflow: 'hidden'
               }}
             >
               {discordUser && userProfile?.discordAvatar ? (
-                <img 
-                  src={userProfile.discordAvatar} 
-                  alt={userProfile.nickname || "Discord Avatar"} 
+                <img
+                  src={userProfile.discordAvatar}
+                  alt={userProfile.nickname || "Discord Avatar"}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               ) : (
@@ -311,23 +306,34 @@ const [showHelp, setShowHelp] = useState(false);
             <span className="custom-tooltip">{discordUser ? `${userProfile?.nickname || '프로필'} (Discord 연동됨)` : '내 프로필 (Discord 미연동)'}</span>
           </div>
 
-          {!discordUser && !isActivity && (
-            <button 
-              className="discord-header-btn"
-              onClick={onDiscordLogin}
-              title="Discord 계정으로 로그인하여 기록을 영구 보존하세요"
+          <div className="custom-tooltip-wrapper">
+            <button
+              className="icon-btn"
+              onClick={toggleTheme}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
             >
-              <DiscordIcon size={16} />
-              <span>Discord 로그인</span>
+              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
             </button>
-          )}
+            <span className="custom-tooltip">{isDarkMode ? '라이트 테마' : '다크 테마'}</span>
+          </div>
+
+          <div className="custom-tooltip-wrapper">
+            <button
+              className="icon-btn"
+              onClick={() => setShowHelp(true)}
+              style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <HelpCircle size={24} />
+            </button>
+            <span className="custom-tooltip">게임 도움말</span>
+          </div>
         </div>
       </div>
       <h1 className="main-title">
         Daily 50 Arrows
       </h1>
       <p className="subtitle">50개의 방향키를 가장 빠르게 입력하세요!<br />(매일 자정 갱신)</p>
-      
+
       <div className="button-group">
         <button className="primary-btn" onClick={onPlay} disabled={isAuthLoading}>Play</button>
         <button className="primary-btn multiplay-btn" onClick={onMultiplayer} disabled={isAuthLoading}>Multiplay</button>
@@ -340,18 +346,18 @@ const [showHelp, setShowHelp] = useState(false);
 
       {showHelp && (
         <div className="modal-overlay" onClick={() => setShowHelp(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
-              <button className="close-btn" onClick={() => setShowHelp(false)}>✕</button>
-              <h2 style={{ fontSize: '1.87rem' }}>게임 도움말</h2>
-              <div className="modal-info-box" style={{ textAlign: 'left', color: '#cbd5e1', lineHeight: '1.7', marginTop: '1.5rem', fontSize: '0.85rem', background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                <ul style={{ paddingLeft: '1.2rem', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                  <li>키보드의 방향키(↑, ↓, ←, →)를 사용하여 화면의 화살표를 똑같이 입력하세요.</li>
-                  <li>방향키를 잘못 누르면 0.5초 동안 입력할 수 없게 됩니다.</li>
-                  <li>매일 자정마다 화살표 세트가 바뀝니다.</li>
-                  <li>실수 없이 가장 빠르게 클리어하여 랭킹에 도전해 보세요!</li>
-                </ul>
-              </div>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+            <button className="close-btn" onClick={() => setShowHelp(false)}>✕</button>
+            <h2 style={{ fontSize: '1.87rem' }}>게임 도움말</h2>
+            <div className="modal-info-box" style={{ textAlign: 'left', color: '#cbd5e1', lineHeight: '1.7', marginTop: '1.5rem', fontSize: '0.85rem', background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+              <ul style={{ paddingLeft: '1.2rem', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <li>키보드의 방향키(↑, ↓, ←, →)를 사용하여 화면의 화살표를 똑같이 입력하세요.</li>
+                <li>방향키를 잘못 누르면 0.5초 동안 입력할 수 없게 됩니다.</li>
+                <li>매일 자정마다 화살표 세트가 바뀝니다.</li>
+                <li>실수 없이 가장 빠르게 클리어하여 랭킹에 도전해 보세요!</li>
+              </ul>
             </div>
+          </div>
         </div>
       )}
 
@@ -359,659 +365,659 @@ const [showHelp, setShowHelp] = useState(false);
 
       {import.meta.env.DEV && (
         <div style={{ position: 'fixed', bottom: '1rem', left: '1rem', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <button 
-            onClick={() => setShowDebug(!showDebug)} 
+          <button
+            onClick={() => setShowDebug(!showDebug)}
             style={{ background: '#fbbf24', color: '#000', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginBottom: showDebug ? '0.5rem' : '0', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}
           >
             {showDebug ? '▼ Close Debug UI' : '▶ Open Debug UI'}
           </button>
-          
+
           {showDebug && (
             <div style={{ background: 'rgba(0,0,0,0.9)', padding: '1rem', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', maxHeight: '50vh', overflowY: 'auto', border: '1px solid #fbbf24', textAlign: 'left', minWidth: '320px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
               <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.5rem', textAlign: 'center' }}>Event Triggers</div>
               <button onClick={async () => {
-             const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalLongestStreak: 0, totalBestRecords: [], totalPlayTime: 0, totalMistakes: 0, totalPerfectClear: 0, dailyRecords: {}, multiplayerPlays: 0, multiplayerWins: 0, multiplayerCompletions: 0, multiplayerBestTime: null };
-             await saveProfile(userProfile, resetData);
-          }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
-            모든 데이터 초기화
-          </button>
-          
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <button onClick={async () => {
-               const kstNow = getKSTDate();
-               const todayStr = getKSTDateString();
-               const timeSec = Number(debugTime); 
-               const mistakes = Number(debugMistakes); 
-               let newTodayCount = 1;
-               if (userProfile?.todayClearDate === todayStr) {
-                 newTodayCount = (userProfile?.todayClearCount || 0) + 1;
-               }
-               let newStreak = 1;
-               if (userProfile?.lastPlayedDate) {
-                 const today = new Date(todayStr);
-                 const last = new Date(userProfile.lastPlayedDate);
-                 const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
-                 if (diffDays === 0) {
-                   newStreak = userProfile.currentStreak || 0;
-                 } else if (diffDays === 1) {
-                   newStreak = (userProfile.currentStreak || 0) + 1;
-                 }
-               }
+                const resetData = { achievements: [], currentStreak: 0, todayClearCount: 0, lastPlayedDate: '', todayClearDate: '', totalPlayCount: 0, longestStreak: 0, bestRecords: [], totalLongestStreak: 0, totalBestRecords: [], totalPlayTime: 0, totalMistakes: 0, totalPerfectClear: 0, dailyRecords: {}, multiplayerPlays: 0, multiplayerWins: 0, multiplayerCompletions: 0, multiplayerBestTime: null };
+                await saveProfile(userProfile, resetData);
+              }} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+                모든 데이터 초기화
+              </button>
 
-               const newUnlocked = [];
-               if (timeSec <= 15) newUnlocked.push('speed_15s');
-               if (timeSec <= 12) newUnlocked.push('speed_12s');
-               if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
-               if (mistakes === 0) newUnlocked.push('flawless');
-               if (newTodayCount >= 5) newUnlocked.push('play_5');
-               if (newTodayCount >= 10) newUnlocked.push('play_10');
-               newUnlocked.push('first_clear');
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button onClick={async () => {
+                  const kstNow = getKSTDate();
+                  const todayStr = getKSTDateString();
+                  const timeSec = Number(debugTime);
+                  const mistakes = Number(debugMistakes);
+                  let newTodayCount = 1;
+                  if (userProfile?.todayClearDate === todayStr) {
+                    newTodayCount = (userProfile?.todayClearCount || 0) + 1;
+                  }
+                  let newStreak = 1;
+                  if (userProfile?.lastPlayedDate) {
+                    const today = new Date(todayStr);
+                    const last = new Date(userProfile.lastPlayedDate);
+                    const diffDays = Math.round((today - last) / (1000 * 60 * 60 * 24));
+                    if (diffDays === 0) {
+                      newStreak = userProfile.currentStreak || 0;
+                    } else if (diffDays === 1) {
+                      newStreak = (userProfile.currentStreak || 0) + 1;
+                    }
+                  }
 
-               if (newStreak >= 2) newUnlocked.push('streak_2');
-               if (newStreak >= 3) newUnlocked.push('streak_3');
-               if (newStreak >= 7) newUnlocked.push('streak_7');
+                  const newUnlocked = [];
+                  if (timeSec <= 15) newUnlocked.push('speed_15s');
+                  if (timeSec <= 12) newUnlocked.push('speed_12s');
+                  if (timeSec <= 9.8) newUnlocked.push('speed_9_8s');
+                  if (mistakes === 0) newUnlocked.push('flawless');
+                  if (newTodayCount >= 5) newUnlocked.push('play_5');
+                  if (newTodayCount >= 10) newUnlocked.push('play_10');
+                  newUnlocked.push('first_clear');
 
-               const currentAchievements = userProfile?.achievements || [];
-               const actualNew = isProfileRegistered ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
-               const updatedAchievements = [...currentAchievements, ...actualNew];
+                  if (newStreak >= 2) newUnlocked.push('streak_2');
+                  if (newStreak >= 3) newUnlocked.push('streak_3');
+                  if (newStreak >= 7) newUnlocked.push('streak_7');
 
-               const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
-               const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
+                  const currentAchievements = userProfile?.achievements || [];
+                  const actualNew = isProfileRegistered ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+                  const updatedAchievements = [...currentAchievements, ...actualNew];
 
-               const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
-               const newTotalBestRecords = [...(userProfile?.totalBestRecords || userProfile?.bestRecords || []), currentRecord]
-                 .sort((a, b) => {
-                   if (a.time !== b.time) return a.time - b.time;
-                   return a.mistakes - b.mistakes;
-                 }).slice(0, 3);
+                  const newTotalPlayCount = (userProfile?.totalPlayCount || 0) + 1;
+                  const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
 
-               const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
-               const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
-               const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
+                  const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+                  const newTotalBestRecords = [...(userProfile?.totalBestRecords || userProfile?.bestRecords || []), currentRecord]
+                    .sort((a, b) => {
+                      if (a.time !== b.time) return a.time - b.time;
+                      return a.mistakes - b.mistakes;
+                    }).slice(0, 3);
 
-               const dailyRecs = userProfile?.dailyRecords || {};
-               const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
-               const newDailyRecords = {
-                 ...dailyRecs,
-                 [todayStr]: {
-                   todayPlayCount: todayDaily.todayPlayCount + 1,
-                   todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
-                   todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
-                   todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
-                   todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
-                 }
-               };
+                  const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+                  const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+                  const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
 
-               const updates = { 
-                 todayClearDate: todayStr, 
-                 todayClearCount: newTodayCount, 
-                 achievements: updatedAchievements,
-                 totalPlayCount: newTotalPlayCount,
-                 currentStreak: newStreak,
-                 lastPlayedDate: todayStr,
-                 totalLongestStreak: newTotalLongestStreak,
-                 totalBestRecords: newTotalBestRecords,
-                 totalPlayTime: newTotalPlayTime,
-                 totalMistakes: newTotalMistakes,
-                 totalPerfectClear: newTotalPerfectClear,
-                 dailyRecords: newDailyRecords
-               };
-               await saveProfile(userProfile, updates);
-               if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
-            }} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', flex: 1, whiteSpace: 'nowrap' }}>
-              게임 완료 트리거
-            </button>
-            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', color: '#cbd5e1' }}>
-              <input type="number" step="0.1" value={debugTime} onChange={e => setDebugTime(e.target.value)} style={{ width: '40px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center' }} title="기록(초)" />초
-              <input type="number" value={debugMistakes} onChange={e => setDebugMistakes(e.target.value)} style={{ width: '30px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center', marginLeft: '0.25rem' }} title="실수 횟수" />회
+                  const dailyRecs = userProfile?.dailyRecords || {};
+                  const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
+                  const newDailyRecords = {
+                    ...dailyRecs,
+                    [todayStr]: {
+                      todayPlayCount: todayDaily.todayPlayCount + 1,
+                      todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+                      todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+                      todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+                      todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
+                    }
+                  };
+
+                  const updates = {
+                    todayClearDate: todayStr,
+                    todayClearCount: newTodayCount,
+                    achievements: updatedAchievements,
+                    totalPlayCount: newTotalPlayCount,
+                    currentStreak: newStreak,
+                    lastPlayedDate: todayStr,
+                    totalLongestStreak: newTotalLongestStreak,
+                    totalBestRecords: newTotalBestRecords,
+                    totalPlayTime: newTotalPlayTime,
+                    totalMistakes: newTotalMistakes,
+                    totalPerfectClear: newTotalPerfectClear,
+                    dailyRecords: newDailyRecords
+                  };
+                  await saveProfile(userProfile, updates);
+                  if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
+                }} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer', flex: 1, whiteSpace: 'nowrap' }}>
+                  게임 완료 트리거
+                </button>
+                <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', color: '#cbd5e1' }}>
+                  <input type="number" step="0.1" value={debugTime} onChange={e => setDebugTime(e.target.value)} style={{ width: '40px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center' }} title="기록(초)" />초
+                  <input type="number" value={debugMistakes} onChange={e => setDebugMistakes(e.target.value)} style={{ width: '30px', padding: '0.2rem', borderRadius: '4px', border: 'none', fontSize: '0.75rem', textAlign: 'center', marginLeft: '0.25rem' }} title="실수 횟수" />회
+                </div>
+              </div>
+
+              <button onClick={async () => {
+                const kstNow = getKSTDate();
+                const todayStr = getKSTDateString();
+                let newStreak = (userProfile?.currentStreak || 1) + 1;
+
+                const newUnlocked = ['leaderboard_entry'];
+                if (newStreak >= 2) newUnlocked.push('streak_2');
+                if (newStreak >= 3) newUnlocked.push('streak_3');
+                if (newStreak >= 7) newUnlocked.push('streak_7');
+
+                const currentAchievements = userProfile?.achievements || [];
+                const actualNew = isProfileRegistered ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+                const updatedAchievements = [...currentAchievements, ...actualNew];
+
+                const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
+
+                const timeSec = Number(debugTime) || 10;
+                const mistakes = Number(debugMistakes) || 0;
+                const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
+                const newTotalBestRecords = [...(userProfile?.totalBestRecords || userProfile?.bestRecords || []), currentRecord]
+                  .sort((a, b) => {
+                    if (a.time !== b.time) return a.time - b.time;
+                    return a.mistakes - b.mistakes;
+                  }).slice(0, 3);
+
+                const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
+                const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
+                const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
+
+                const dailyRecs = userProfile?.dailyRecords || {};
+                const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
+                const newDailyRecords = {
+                  ...dailyRecs,
+                  [todayStr]: {
+                    todayPlayCount: todayDaily.todayPlayCount + 1,
+                    todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
+                    todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
+                    todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
+                    todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
+                  }
+                };
+
+                const updates = {
+                  currentStreak: newStreak,
+                  lastPlayedDate: todayStr,
+                  achievements: updatedAchievements,
+                  totalLongestStreak: newTotalLongestStreak,
+                  totalBestRecords: newTotalBestRecords,
+                  totalPlayTime: newTotalPlayTime,
+                  totalMistakes: newTotalMistakes,
+                  totalPerfectClear: newTotalPerfectClear,
+                  dailyRecords: newDailyRecords,
+                  totalPlayCount: (userProfile?.totalPlayCount || 0) + 1
+                };
+                await saveProfile(userProfile, updates);
+                if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
+              }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
+                점수 등록 트리거 (스트릭 +1 강제 반영)
+              </button>
             </div>
-          </div>
-
-          <button onClick={async () => {
-             const kstNow = getKSTDate();
-             const todayStr = getKSTDateString();
-             let newStreak = (userProfile?.currentStreak || 1) + 1;
-             
-             const newUnlocked = ['leaderboard_entry'];
-             if (newStreak >= 2) newUnlocked.push('streak_2');
-             if (newStreak >= 3) newUnlocked.push('streak_3');
-             if (newStreak >= 7) newUnlocked.push('streak_7');
-
-             const currentAchievements = userProfile?.achievements || [];
-             const actualNew = isProfileRegistered ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
-             const updatedAchievements = [...currentAchievements, ...actualNew];
-
-             const newTotalLongestStreak = Math.max(userProfile?.totalLongestStreak || userProfile?.longestStreak || 0, newStreak);
-
-             const timeSec = Number(debugTime) || 10;
-             const mistakes = Number(debugMistakes) || 0;
-             const currentRecord = { time: timeSec, mistakes: mistakes, date: todayStr };
-             const newTotalBestRecords = [...(userProfile?.totalBestRecords || userProfile?.bestRecords || []), currentRecord]
-               .sort((a, b) => {
-                 if (a.time !== b.time) return a.time - b.time;
-                 return a.mistakes - b.mistakes;
-               }).slice(0, 3);
-               
-             const newTotalPlayTime = Number(((userProfile?.totalPlayTime || 0) + timeSec).toFixed(2));
-             const newTotalMistakes = (userProfile?.totalMistakes || 0) + mistakes;
-             const newTotalPerfectClear = (userProfile?.totalPerfectClear || 0) + (mistakes === 0 ? 1 : 0);
-
-             const dailyRecs = userProfile?.dailyRecords || {};
-             const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0 };
-             const newDailyRecords = {
-               ...dailyRecs,
-               [todayStr]: {
-                 todayPlayCount: todayDaily.todayPlayCount + 1,
-                 todayBestTime: timeSec < todayDaily.todayBestTime ? timeSec : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestTime),
-                 todayBestMistakes: timeSec < todayDaily.todayBestTime ? mistakes : (timeSec === todayDaily.todayBestTime ? Math.min(todayDaily.todayBestMistakes, mistakes) : todayDaily.todayBestMistakes),
-                 todayPlayTime: (todayDaily.todayPlayTime || 0) + timeSec,
-                 todayMistakes: (todayDaily.todayMistakes || 0) + mistakes
-               }
-             };
-
-             const updates = { 
-               currentStreak: newStreak, 
-               lastPlayedDate: todayStr, 
-               achievements: updatedAchievements, 
-               totalLongestStreak: newTotalLongestStreak, 
-               totalBestRecords: newTotalBestRecords,
-               totalPlayTime: newTotalPlayTime,
-               totalMistakes: newTotalMistakes,
-               totalPerfectClear: newTotalPerfectClear,
-               dailyRecords: newDailyRecords,
-               totalPlayCount: (userProfile?.totalPlayCount || 0) + 1
-             };
-             await saveProfile(userProfile, updates);
-             if (actualNew.length > 0) setUnlockedPopups(prev => [...prev, ...actualNew]);
-          }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem', cursor: 'pointer' }}>
-            점수 등록 트리거 (스트릭 +1 강제 반영)
-          </button>
-        </div>
           )}
         </div>
       )}
 
       {showAchievements && (
         <div className="modal-overlay" onClick={() => setShowAchievements(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '510px', width: '95%' }}>
-              <button className="close-btn" onClick={() => setShowAchievements(false)}>✕</button>
-              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>도전과제</h2>
-              
-              <div className="modal-info-box" style={{ 
-                background: 'rgba(30, 58, 138, 0.3)', 
-                padding: '1.5rem', 
-                borderRadius: '12px', 
-                border: '1px solid rgba(59, 130, 246, 0.2)', 
-                marginBottom: '1.5rem',
-                height: '316px', // 아이템 높이 약 82px * 3개 + gap 16px * 2 + padding = 약 316px (3개 렌더링 시 최적)
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem'
-              }}>
-                {ACHIEVEMENTS.map(ach => {
-                  const isUnlocked = userProfile?.achievements?.includes(ach.id);
-                  const iconColor = isUnlocked ? '#f59e0b' : '#94a3b8';
-                  const bg = isUnlocked ? 'rgba(245, 158, 11, 0.2)' : 'rgba(148, 163, 184, 0.2)';
-                  const border = isUnlocked ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(148, 163, 184, 0.5)';
-                  const titleColor = isUnlocked ? '#f8fafc' : '#94a3b8';
-                  const descColor = isUnlocked ? '#94a3b8' : '#64748b';
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '510px', width: '95%' }}>
+            <button className="close-btn" onClick={() => setShowAchievements(false)}>✕</button>
+            <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>도전과제</h2>
 
-                  return (
-                    <div key={ach.id} className="inner-box" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', flexShrink: 0 }}>
-                      <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: bg, border: border, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-                        <Trophy size={24} color={iconColor} />
-                      </div>
-                      <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                        <p className="ach-title" style={{ margin: 0, fontWeight: 'bold', fontSize: '1rem', color: titleColor }}>{ach.title}</p>
-                        <p className="ach-desc" style={{ margin: 0, fontSize: '0.8rem', color: descColor }}>{ach.desc}</p>
-                      </div>
+            <div className="modal-info-box" style={{
+              background: 'rgba(30, 58, 138, 0.3)',
+              padding: '1.5rem',
+              borderRadius: '12px',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              marginBottom: '1.5rem',
+              height: '316px', // 아이템 높이 약 82px * 3개 + gap 16px * 2 + padding = 약 316px (3개 렌더링 시 최적)
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem'
+            }}>
+              {ACHIEVEMENTS.map(ach => {
+                const isUnlocked = userProfile?.achievements?.includes(ach.id);
+                const iconColor = isUnlocked ? '#f59e0b' : '#94a3b8';
+                const bg = isUnlocked ? 'rgba(245, 158, 11, 0.2)' : 'rgba(148, 163, 184, 0.2)';
+                const border = isUnlocked ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(148, 163, 184, 0.5)';
+                const titleColor = isUnlocked ? '#f8fafc' : '#94a3b8';
+                const descColor = isUnlocked ? '#94a3b8' : '#64748b';
+
+                return (
+                  <div key={ach.id} className="inner-box" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', flexShrink: 0 }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: bg, border: border, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                      <Trophy size={24} color={iconColor} />
                     </div>
-                  );
-                })}
-              </div>
+                    <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <p className="ach-title" style={{ margin: 0, fontWeight: 'bold', fontSize: '1rem', color: titleColor }}>{ach.title}</p>
+                      <p className="ach-desc" style={{ margin: 0, fontSize: '0.8rem', color: descColor }}>{ach.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          </div>
         </div>
       )}
 
       {showStatistics && (
         <div className="modal-overlay" onClick={() => setShowStatistics(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '510px', width: '95%', position: 'relative' }}>
-              <button className="close-btn" onClick={() => setShowStatistics(false)}>✕</button>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '510px', width: '95%', position: 'relative' }}>
+            <button className="close-btn" onClick={() => setShowStatistics(false)}>✕</button>
 
-              <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>{statsPage === 0 ? '통계 요약' : statsPage === 1 ? '역대 최고 기록' : '최근 7일 기록'}</h2>
+            <h2 style={{ fontSize: '1.87rem', marginBottom: '1.5rem' }}>{statsPage === 0 ? '통계 요약' : statsPage === 1 ? '역대 최고 기록' : '최근 7일 기록'}</h2>
 
-              {/* Pagination Arrows */}
-              {statsPage > 0 && (
-                <button onClick={() => setStatsPage(p => p - 1)} style={{ position: 'absolute', left: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
-                  <LucideLeft size={24} />
-                </button>
-              )}
-              {statsPage < 2 && (
-                <button onClick={() => setStatsPage(p => p + 1)} style={{ position: 'absolute', right: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
-                  <LucideRight size={24} />
-                </button>
-              )}
-              
-              {!userProfile ? (
-                <p>로딩 중...</p>
-              ) : (
-                <>
-                  {statsPage === 0 && (
-                    <div style={{ width: '90%', margin: '0 auto', height: '540px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                            <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.totalPlayCount || 0}</span>
-                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
+            {/* Pagination Arrows */}
+            {statsPage > 0 && (
+              <button onClick={() => setStatsPage(p => p - 1)} style={{ position: 'absolute', left: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                <LucideLeft size={24} />
+              </button>
+            )}
+            {statsPage < 2 && (
+              <button onClick={() => setStatsPage(p => p + 1)} style={{ position: 'absolute', right: '15px', top: '55%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc', cursor: 'pointer', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                <LucideRight size={24} />
+              </button>
+            )}
+
+            {!userProfile ? (
+              <p>로딩 중...</p>
+            ) : (
+              <>
+                {statsPage === 0 && (
+                  <div style={{ width: '90%', margin: '0 auto', height: '540px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>주요 통계 요약</h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                          <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{userProfile.totalPlayCount || 0}</span>
+                          <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>완료한 게임 수</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                            <Flame size={20} color={(userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
+                            <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{userProfile.totalLongestStreak || userProfile.currentStreak || 0}</span>
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
-                              <Flame size={20} color={(userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#ef4444' : '#64748b'} fill={(userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#f97316' : 'transparent'} />
-                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (userProfile.totalLongestStreak || userProfile.currentStreak || 0) > 0 ? '#f59e0b' : '#94a3b8' }}>{userProfile.totalLongestStreak || userProfile.currentStreak || 0}</span>
-                            </div>
-                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                            <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginTop: '0.3rem' }}>{(userProfile.backupCodeIssuedAt || userProfile.gameStartDate) ? (userProfile.backupCodeIssuedAt || userProfile.gameStartDate).substring(2).replace(/-/g, '.') : 'N/A'}</span>
-                            <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>가입일</span>
-                          </div>
+                          <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>최장 스트릭</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                          <span className="stat-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginTop: '0.3rem' }}>{(userProfile.backupCodeIssuedAt || userProfile.gameStartDate) ? (userProfile.backupCodeIssuedAt || userProfile.gameStartDate).substring(2).replace(/-/g, '.') : 'N/A'}</span>
+                          <span className="stat-label" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>가입일</span>
                         </div>
                       </div>
-
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>오늘의 기록</h3>
-                        {(() => {
-                          const kstNow = getKSTDate();
-                          const todayStr = getKSTDateString();
-                          const dailyRecs = userProfile.dailyRecords || {};
-                          const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayMistakes: 0, todayPlayTime: 0, todayTrials: 0 };
-                          
-                          const avgMistakes = todayDaily.todayPlayCount > 0 ? (todayDaily.todayMistakes / todayDaily.todayPlayCount).toFixed(1) : 0;
-                          const totalTimeSec = todayDaily.todayPlayTime || 0;
-                          const timeStr = `${Math.floor(totalTimeSec)}s`;
-
-                          return (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fbbf24' }}>{todayDaily.todayTrials || 0}</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>시도한<br />게임 수</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{todayDaily.todayPlayCount}</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>완료한<br />게임 수</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{avgMistakes}</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>틀린 횟수 평균</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3b82f6' }}>{todayDaily.todayPlayCount > 0 ? timeStr : '-'}</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이한<br />시간</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>멀티플레이 기록</h3>
-                        {(() => {
-                          const mpPlays = userProfile.multiplayerPlays || 0;
-                          const mpWins = userProfile.multiplayerWins || 0;
-                          const winRate = mpPlays > 0 ? ((mpWins / mpPlays) * 100).toFixed(1) : 0;
-                          const mpCompletions = userProfile.multiplayerCompletions || 0;
-                          const completionRate = mpPlays > 0 ? ((mpCompletions / mpPlays) * 100).toFixed(1) : 0;
-                          const mpBestTime = userProfile.multiplayerBestTime;
-                          const timeStr = mpBestTime && mpBestTime !== Infinity ? `${mpBestTime}s` : '-';
-
-                          return (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fbbf24' }}>{mpPlays}</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이<br />횟수</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{winRate}%</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>승률<br />({mpWins}승)</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{timeStr}</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>최고 기록</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3b82f6' }}>{completionRate}%</span>
-                                <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>완주율</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      
                     </div>
-                  )}
 
-                  {statsPage === 1 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', minHeight: '540px', justifyContent: 'flex-start' }}>
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '0.8rem', height: '316px', overflowY: 'auto' }}>
-                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: 'auto 0' }}>
-                          {[0, 1, 2].map((idx) => {
-                            const record = userProfile.totalBestRecords ? userProfile.totalBestRecords[idx] : null;
-                            return (
-                              <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                                  <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                    {record ? (
-                                      <>
-                                        <span className="stat-highlight" style={{ fontSize: '0.925rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
-                                        <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
-                                          {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
-                                        </span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span className="stat-highlight" style={{ fontSize: '0.925rem', fontWeight: 'bold', color: '#94a3b8' }}>기록 없음</span>
-                                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>-</span>
-                                      </>
-                                    )}
-                                  </div>
+                    <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>오늘의 기록</h3>
+                      {(() => {
+                        const kstNow = getKSTDate();
+                        const todayStr = getKSTDateString();
+                        const dailyRecs = userProfile.dailyRecords || {};
+                        const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayMistakes: 0, todayPlayTime: 0, todayTrials: 0 };
+
+                        const avgMistakes = todayDaily.todayPlayCount > 0 ? (todayDaily.todayMistakes / todayDaily.todayPlayCount).toFixed(1) : 0;
+                        const totalTimeSec = todayDaily.todayPlayTime || 0;
+                        const timeStr = `${Math.floor(totalTimeSec)}s`;
+
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fbbf24' }}>{todayDaily.todayTrials || 0}</span>
+                              <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>시도한<br />게임 수</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{todayDaily.todayPlayCount}</span>
+                              <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>완료한<br />게임 수</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{avgMistakes}</span>
+                              <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>틀린 횟수 평균</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3b82f6' }}>{todayDaily.todayPlayCount > 0 ? timeStr : '-'}</span>
+                              <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이한<br />시간</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>멀티플레이 기록</h3>
+                      {(() => {
+                        const mpPlays = userProfile.multiplayerPlays || 0;
+                        const mpWins = userProfile.multiplayerWins || 0;
+                        const winRate = mpPlays > 0 ? ((mpWins / mpPlays) * 100).toFixed(1) : 0;
+                        const mpCompletions = userProfile.multiplayerCompletions || 0;
+                        const completionRate = mpPlays > 0 ? ((mpCompletions / mpPlays) * 100).toFixed(1) : 0;
+                        const mpBestTime = userProfile.multiplayerBestTime;
+                        const timeStr = mpBestTime && mpBestTime !== Infinity ? `${mpBestTime}s` : '-';
+
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fbbf24' }}>{mpPlays}</span>
+                              <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>플레이<br />횟수</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{winRate}%</span>
+                              <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>승률<br />({mpWins}승)</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f97316' }}>{timeStr}</span>
+                              <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>최고 기록</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              <span className="stat-number" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3b82f6' }}>{completionRate}%</span>
+                              <span className="stat-label" style={{ fontSize: '0.75rem', color: '#94a3b8', wordBreak: 'keep-all' }}>완주율</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+
+                  </div>
+                )}
+
+                {statsPage === 1 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', minHeight: '540px', justifyContent: 'flex-start' }}>
+                    <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '0.8rem', height: '316px', overflowY: 'auto' }}>
+                      <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>역대 최고 기록 Top 3</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: 'auto 0' }}>
+                        {[0, 1, 2].map((idx) => {
+                          const record = userProfile.totalBestRecords ? userProfile.totalBestRecords[idx] : null;
+                          return (
+                            <div key={idx} className="inner-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                <span style={{ fontSize: '1.4rem', width: '24px', textAlign: 'center', lineHeight: '1' }}>{['🥇', '🥈', '🥉'][idx]}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                  {record ? (
+                                    <>
+                                      <span className="stat-highlight" style={{ fontSize: '0.925rem', fontWeight: 'bold', color: '#f8fafc' }}>{record.time.toFixed(2)}s</span>
+                                      <span style={{ fontSize: '0.8rem', color: record.mistakes === 0 ? '#10b981' : '#ef4444' }}>
+                                        {record.mistakes === 0 ? '실수 없음' : `실수 ${record.mistakes}회`}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="stat-highlight" style={{ fontSize: '0.925rem', fontWeight: 'bold', color: '#94a3b8' }}>기록 없음</span>
+                                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>-</span>
+                                    </>
+                                  )}
                                 </div>
-                                <span className="stat-date" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record ? record.date : '-'}</span>
                               </div>
-                            );
-                          })}
-                        </div>
+                              <span className="stat-date" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{record ? record.date : '-'}</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '240px' }}>
-                        {(() => {
-                          const kstNow = getKSTDate();
-                          const todayDow = kstNow.getDay();
-                          const N_WEEKS = 26; // Half a year
-                          const totalDays = N_WEEKS * 7 + (todayDow + 1);
+                    </div>
+                    <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', height: '240px' }}>
+                      {(() => {
+                        const kstNow = getKSTDate();
+                        const todayDow = kstNow.getDay();
+                        const N_WEEKS = 26; // Half a year
+                        const totalDays = N_WEEKS * 7 + (todayDow + 1);
 
-                          const dailyRecs = userProfile.dailyRecords || {};
+                        const dailyRecs = userProfile.dailyRecords || {};
 
-                          const getGrassStyle = (count) => {
-                            if (!count || count === 0) return { backgroundColor: 'rgba(255, 255, 255, 0.05)' };
-                            if (count <= 2) return { backgroundColor: '#065f46' }; // 어두운 초록
-                            if (count <= 5) return { backgroundColor: '#059669' }; // 중간 초록
-                            if (count <= 9) return { backgroundColor: '#10b981' }; // 밝은 에메랄드
-                            return { backgroundColor: '#34d399', boxShadow: '0 0 6px rgba(52, 211, 153, 0.8)' }; // 형광 네온 그린 + 빛바램
-                          };
+                        const getGrassStyle = (count) => {
+                          if (!count || count === 0) return { backgroundColor: 'rgba(255, 255, 255, 0.05)' };
+                          if (count <= 2) return { backgroundColor: '#065f46' }; // 어두운 초록
+                          if (count <= 5) return { backgroundColor: '#059669' }; // 중간 초록
+                          if (count <= 9) return { backgroundColor: '#10b981' }; // 밝은 에메랄드
+                          return { backgroundColor: '#34d399', boxShadow: '0 0 6px rgba(52, 211, 153, 0.8)' }; // 형광 네온 그린 + 빛바램
+                        };
 
-                          const cells = [];
-                          for (let i = 0; i < totalDays; i++) {
-                            const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
-                            const dateStr = d.toISOString().split('T')[0];
-                            const count = dailyRecs[dateStr]?.todayPlayCount || 0;
-                            const customStyle = getGrassStyle(count);
-                            const tooltip = `${dateStr} : ${count}판`;
-                            cells.push(
-                              <div key={dateStr} title={tooltip} style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', ...customStyle }} />
-                            );
-                          }
+                        const cells = [];
+                        for (let i = 0; i < totalDays; i++) {
+                          const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
+                          const dateStr = d.toISOString().split('T')[0];
+                          const count = dailyRecs[dateStr]?.todayPlayCount || 0;
+                          const customStyle = getGrassStyle(count);
+                          const tooltip = `${dateStr} : ${count}판`;
+                          cells.push(
+                            <div key={dateStr} title={tooltip} style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', ...customStyle }} />
+                          );
+                        }
 
-                          const monthLabels = [];
-                          let lastPlacedCol = -1;
-                          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                          let prevMonth = -1;
-                          for (let i = 0; i < totalDays; i++) {
-                            const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
-                            const m = d.getMonth();
-                            const colIndex = Math.floor(i / 7);
-                            if (m !== prevMonth) {
-                              if (i !== 0 || d.getDate() <= 7) {
-                                if (colIndex > lastPlacedCol + 1) {
-                                  let labelText = monthNames[m];
-                                  if (m === 0) {
-                                    labelText = `${d.getFullYear().toString().substring(2)}' ${labelText}`;
-                                  }
-                                  monthLabels.push(
-                                    <span key={`month-${i}`} style={{ position: 'absolute', left: `${colIndex * 16}px`, fontSize: '0.65rem', color: '#94a3b8', bottom: 0, lineHeight: '14px', whiteSpace: 'nowrap' }}>
-                                      {labelText}
-                                    </span>
-                                  );
-                                  lastPlacedCol = colIndex;
+                        const monthLabels = [];
+                        let lastPlacedCol = -1;
+                        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        let prevMonth = -1;
+                        for (let i = 0; i < totalDays; i++) {
+                          const d = new Date(kstNow.getTime() - (totalDays - 1 - i) * 24 * 60 * 60 * 1000);
+                          const m = d.getMonth();
+                          const colIndex = Math.floor(i / 7);
+                          if (m !== prevMonth) {
+                            if (i !== 0 || d.getDate() <= 7) {
+                              if (colIndex > lastPlacedCol + 1) {
+                                let labelText = monthNames[m];
+                                if (m === 0) {
+                                  labelText = `${d.getFullYear().toString().substring(2)}' ${labelText}`;
                                 }
+                                monthLabels.push(
+                                  <span key={`month-${i}`} style={{ position: 'absolute', left: `${colIndex * 16}px`, fontSize: '0.65rem', color: '#94a3b8', bottom: 0, lineHeight: '14px', whiteSpace: 'nowrap' }}>
+                                    {labelText}
+                                  </span>
+                                );
+                                lastPlacedCol = colIndex;
                               }
-                              prevMonth = m;
                             }
+                            prevMonth = m;
                           }
+                        }
 
-                          return (
-                            <div style={{ transform: 'translateY(-5px)' }}>
-                              <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>잔디 기록</h3>
-                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.75rem' }}>
-                                <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: '4px', paddingRight: '0.2rem', paddingTop: '18px' }}>
-                                  <span />
-                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Mon</span>
-                                  <span />
-                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Wed</span>
-                                  <span />
-                                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Fri</span>
-                                  <span />
-                                </div>
-                                <div className="custom-scroll" style={{ overflowX: 'auto', paddingBottom: '0.5rem', direction: 'rtl', flex: 1 }}>
-                                  <div style={{ display: 'flex', flexDirection: 'column', direction: 'ltr', width: 'max-content', paddingBottom: '4px' }}>
-                                    <div style={{ position: 'relative', height: '14px', marginBottom: '4px' }}>
-                                      {monthLabels}
-                                    </div>
-                                    <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(7, 12px)', gap: '4px' }}>
-                                      {cells}
-                                    </div>
+                        return (
+                          <div style={{ transform: 'translateY(-5px)' }}>
+                            <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>잔디 기록</h3>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginTop: '0.75rem' }}>
+                              <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 12px)', gap: '4px', paddingRight: '0.2rem', paddingTop: '18px' }}>
+                                <span />
+                                <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Mon</span>
+                                <span />
+                                <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Wed</span>
+                                <span />
+                                <span style={{ fontSize: '0.6rem', color: '#94a3b8', lineHeight: '12px' }}>Fri</span>
+                                <span />
+                              </div>
+                              <div className="custom-scroll" style={{ overflowX: 'auto', paddingBottom: '0.5rem', direction: 'rtl', flex: 1 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', direction: 'ltr', width: 'max-content', paddingBottom: '4px' }}>
+                                  <div style={{ position: 'relative', height: '14px', marginBottom: '4px' }}>
+                                    {monthLabels}
+                                  </div>
+                                  <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(7, 12px)', gap: '4px' }}>
+                                    {cells}
                                   </div>
                                 </div>
                               </div>
-                              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.4rem', marginTop: '0', fontSize: '0.75rem', color: '#94a3b8' }}>
-                                <span>Less</span>
-                                <div style={{ display: 'flex', gap: '4px' }}>
-                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }} />
-                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#065f46' }} />
-                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#059669' }} />
-                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#10b981' }} />
-                                  <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#34d399', boxShadow: '0 0 6px rgba(52, 211, 153, 0.8)' }} />
-                                </div>
-                                <span>More</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.4rem', marginTop: '0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                              <span>Less</span>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }} />
+                                <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#065f46' }} />
+                                <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#059669' }} />
+                                <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#10b981' }} />
+                                <div style={{ width: '12px', height: '12px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.05)', backgroundColor: '#34d399', boxShadow: '0 0 6px rgba(52, 211, 153, 0.8)' }} />
+                              </div>
+                              <span>More</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {statsPage === 2 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', height: '540px', justifyContent: 'center' }}>
+                    <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                      <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>최근 7일 기록</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                        {(() => {
+                          const dailyRecs = userProfile.dailyRecords || {};
+                          const kstNow = getKSTDate();
+                          const list = [];
+                          for (let i = 0; i < 7; i++) {
+                            const d = new Date(kstNow.getTime() - i * 24 * 60 * 60 * 1000);
+                            const dateStr = d.toISOString().split('T')[0];
+                            const rec = dailyRecs[dateStr];
+                            if (rec) {
+                              list.push({ dateStr, rec });
+                            }
+                          }
+                          if (list.length === 0) return <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0.5rem 0' }}>최근 7일간의 기록이 없습니다.</p>;
+
+                          const header = (
+                            <div key="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.2rem 0.4rem 0.2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '0.2rem' }}>
+                              <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold' }}>날짜</span>
+                              <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>플레이 횟수</span>
+                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>최고 기록</span>
+                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>실수</span>
                               </div>
                             </div>
                           );
+
+                          return [header, ...list.map((item, idx) => (
+                            <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
+                              <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-', '.')}</span>
+                              <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayPlayCount || 0}회</span>
+                                <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
+                                <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayBestMistakes === 0 ? '0회' : `${item.rec.todayBestMistakes}회`}</span>
+                              </div>
+                            </div>
+                          ))];
                         })()}
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {statsPage === 2 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '90%', margin: '0 auto', height: '540px', justifyContent: 'center' }}>
-                      <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                        <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>최근 7일 기록</h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-                          {(() => {
-                            const dailyRecs = userProfile.dailyRecords || {};
-                            const kstNow = getKSTDate();
-                            const list = [];
-                            for(let i=0; i<7; i++) {
-                              const d = new Date(kstNow.getTime() - i * 24 * 60 * 60 * 1000);
-                              const dateStr = d.toISOString().split('T')[0];
-                              const rec = dailyRecs[dateStr];
-                              if (rec) {
-                                list.push({ dateStr, rec });
-                              }
-                            }
-                            if (list.length === 0) return <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0.5rem 0' }}>최근 7일간의 기록이 없습니다.</p>;
-                            
-                            const header = (
-                              <div key="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.2rem 0.4rem 0.2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '0.2rem' }}>
-                                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold' }}>날짜</span>
-                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>플레이 횟수</span>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>최고 기록</span>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 'bold', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>실수</span>
-                                </div>
-                              </div>
-                            );
-
-                            return [header, ...list.map((item, idx) => (
-                              <div key={item.dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.2rem', borderBottom: idx < list.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' }}>
-                                <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.dateStr.substring(5).replace('-','.')}</span>
-                                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.75rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayPlayCount || 0}회</span>
-                                  <span style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: '0.9rem', width: '70px', textAlign: 'right', whiteSpace: 'nowrap' }}>{(item.rec.todayBestTime || 0).toFixed(2)}s</span>
-                                  <span style={{ color: item.rec.todayBestMistakes === 0 ? '#10b981' : '#ef4444', fontSize: '0.75rem', width: '45px', textAlign: 'right', whiteSpace: 'nowrap' }}>{item.rec.todayBestMistakes === 0 ? '0회' : `${item.rec.todayBestMistakes}회`}</span>
-                                </div>
-                              </div>
-                            ))];
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                </>
-              )}
-            </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
       {showProfile && (
         <div className="modal-overlay" onClick={() => setShowProfile(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
-              <button className="close-btn" onClick={() => setShowProfile(false)}>✕</button>
-              <h2 style={{ fontSize: '1.87rem', marginBottom: '0.5rem' }}>내 프로필</h2>
-              
-              {!userProfile ? (
-                <p>로딩 중...</p>
-              ) : (
-                <>
-                  {/* 1. Discord 계정 연동 카드 */}
-                  {discordUser ? (
-                    <div className="discord-profile-card">
-                      <div className="discord-profile-avatar-wrap">
-                        {userProfile.discordAvatar ? (
-                          <img src={userProfile.discordAvatar} alt={userProfile.nickname || "Avatar"} className="discord-profile-avatar" />
-                        ) : (
-                          <div className="discord-profile-avatar-fallback"><DiscordIcon size={26} /></div>
-                        )}
-                        <div className="discord-online-dot" title="연결됨" />
-                      </div>
-                      <div className="discord-profile-info">
-                        <div className="discord-profile-name-row">
-                          <span className="discord-global-name">{discordUser.global_name || discordUser.username}</span>
-                          <span className="discord-tag">@{discordUser.username}</span>
-                        </div>
-                        <div className="discord-status-badge">
-                          <DiscordIcon size={12} />
-                          <span>Discord 연동 계정</span>
-                        </div>
-                      </div>
-                      {isActivity ? (
-                        <div style={{ fontSize: '0.75rem', color: '#5865F2', background: 'rgba(88, 101, 242, 0.15)', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>
-                          Activity
-                        </div>
-                      ) : (
-                        <button onClick={onDiscordLogout} className="discord-logout-btn" title="Discord 로그아웃">
-                          <LogOut size={14} />
-                          <span>로그아웃</span>
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="discord-connect-card">
-                      <div className="discord-connect-header">
-                        <div className="discord-connect-icon-box">
-                          <DiscordIcon size={24} />
-                        </div>
-                        <div className="discord-connect-text">
-                          <div className="discord-connect-title">Discord 계정 연동</div>
-                          <div className="discord-connect-desc">스트릭, 통계, 업적을 안전하게 영구 보존하세요.</div>
-                        </div>
-                      </div>
-                      <button onClick={onDiscordLogin} className="discord-login-btn">
-                        <DiscordIcon size={18} />
-                        <span>Discord로 간편 로그인</span>
-                      </button>
-                    </div>
-                  )}
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '2.5rem', maxWidth: '440px', width: '90%' }}>
+            <button className="close-btn" onClick={() => setShowProfile(false)}>✕</button>
+            <h2 style={{ fontSize: '1.87rem', marginBottom: '0.5rem' }}>내 프로필</h2>
 
-                  {/* 2. 게임 내 닉네임 설정 */}
-                  <div style={{ position: 'relative', marginBottom: '1.2rem', marginTop: '0.8rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                      <p className="modal-section-label" style={{ fontSize: '0.88rem', margin: 0 }}>게임 내 표시 닉네임</p>
-                      {!isEditingNickname ? (
-                        <button onClick={() => setIsEditingNickname(true)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }} title="닉네임 수정">
-                          <Pencil size={14} />
-                        </button>
+            {!userProfile ? (
+              <p>로딩 중...</p>
+            ) : (
+              <>
+                {/* 1. Discord 계정 연동 카드 */}
+                {discordUser ? (
+                  <div className="discord-profile-card">
+                    <div className="discord-profile-avatar-wrap">
+                      {userProfile.discordAvatar ? (
+                        <img src={userProfile.discordAvatar} alt={userProfile.nickname || "Avatar"} className="discord-profile-avatar" />
                       ) : (
-                        <button onClick={handleSaveNickname} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: 0, display: 'flex' }} title="저장">
-                          <Pencil size={14} />
-                        </button>
+                        <div className="discord-profile-avatar-fallback"><DiscordIcon size={26} /></div>
                       )}
+                      <div className="discord-online-dot" title="연결됨" />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '240px' }}>
-                        <input 
-                          type="text" 
-                          value={isEditingNickname ? editNicknameValue : userProfile.nickname} 
-                          onChange={handleEditNicknameChange} 
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNickname(); }}
-                          placeholder="한글 8자, 영문 20자 내외"
-                          className="nickname-input profile-nickname-text"
-                          readOnly={!isEditingNickname}
-                          style={{ 
-                            flex: 1, 
-                            minWidth: 0, 
-                            padding: '0.4rem 0.6rem', 
-                            fontSize: '0.9rem', 
-                            textAlign: 'center',
-                            outline: 'none',
-                            width: '100%',
-                            cursor: isEditingNickname ? 'text' : 'default',
-                            opacity: isEditingNickname ? 1 : 0.85
-                          }}
-                        />
+                    <div className="discord-profile-info">
+                      <div className="discord-profile-name-row">
+                        <span className="discord-global-name">{discordUser.global_name || discordUser.username}</span>
+                        <span className="discord-tag">@{discordUser.username}</span>
                       </div>
-                      <p style={{ position: 'absolute', bottom: '-1.3rem', color: '#ef4444', fontSize: '0.75rem', margin: 0, visibility: nicknameError ? 'visible' : 'hidden', width: '100%', textAlign: 'center' }}>
-                        {nicknameError || "안내 멘트 영역"}
-                      </p>
+                      <div className="discord-status-badge">
+                        <DiscordIcon size={12} />
+                        <span>Discord 연동 계정</span>
+                      </div>
                     </div>
-                  </div>
-                  
-                  {/* 3. 과거 백업 코드 데이터 이전 창구 (기존 유저용 접이식) */}
-                  <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.85rem', width: '100%' }}>
-                    <button 
-                      onClick={() => setShowLegacyBackup(!showLegacyBackup)} 
-                      style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline', width: '100%', textAlign: 'center' }}
-                    >
-                      {showLegacyBackup ? '▲ 과거 백업 코드 가져오기 닫기' : '▼ 과거 백업 코드로 데이터 가져오기'}
-                    </button>
-                    {showLegacyBackup && (
-                      <div style={{ marginTop: '0.8rem', background: 'rgba(30, 58, 138, 0.25)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                        <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: '0 0 0.5rem 0', textAlign: 'center', lineHeight: '1.4' }}>
-                          이전에 발급받은 8자리 백업 코드가 있다면 입력하여<br />기존 스트릭과 기록을 불러옵니다.
-                        </p>
-                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                          <input 
-                            type="text" 
-                            value={recoverCode} 
-                            onChange={handleRecoverCodeChange} 
-                            placeholder="백업 코드 입력"
-                            className="nickname-input"
-                            maxLength={9}
-                            style={{ width: '140px', textTransform: 'uppercase', textAlign: 'center', fontSize: '0.8rem', padding: '0.35rem' }}
-                          />
-                          <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', borderRadius: '6px' }}>
-                            {isRecovering ? '가져오는 중...' : '불러오기'}
-                          </button>
-                        </div>
+                    {isActivity ? (
+                      <div style={{ fontSize: '0.75rem', color: '#5865F2', background: 'rgba(88, 101, 242, 0.15)', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>
+                        Activity
                       </div>
+                    ) : (
+                      <button onClick={onDiscordLogout} className="discord-unlink-btn" title="계정 연동 해제">
+                        <LogOut size={15} />
+                        <span>해제</span>
+                      </button>
                     )}
                   </div>
-                </>
-              )}
-            </div>
+                ) : (
+                  <div className="discord-connect-card">
+                    <div className="discord-connect-header">
+                      <div className="discord-connect-icon-box">
+                        <DiscordIcon size={24} />
+                      </div>
+                      <div className="discord-connect-text">
+                        <div className="discord-connect-title">Discord 계정 연동</div>
+                        <div className="discord-connect-desc">스트릭, 통계, 업적을 안전하게 영구 보존하세요.</div>
+                      </div>
+                    </div>
+                    <button onClick={onDiscordLogin} className="discord-login-btn">
+                      <DiscordIcon size={18} />
+                      <span>Discord로 간편 로그인</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 2. 게임 내 닉네임 설정 */}
+                <div style={{ position: 'relative', marginBottom: '1.2rem', marginTop: '0.8rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <p className="modal-section-label" style={{ fontSize: '0.88rem', margin: 0 }}>게임 내 표시 닉네임</p>
+                    {!isEditingNickname ? (
+                      <button onClick={() => setIsEditingNickname(true)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }} title="닉네임 수정">
+                        <Pencil size={14} />
+                      </button>
+                    ) : (
+                      <button onClick={handleSaveNickname} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: 0, display: 'flex' }} title="저장">
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '240px' }}>
+                      <input
+                        type="text"
+                        value={isEditingNickname ? editNicknameValue : userProfile.nickname}
+                        onChange={handleEditNicknameChange}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNickname(); }}
+                        placeholder="한글 8자, 영문 20자 내외"
+                        className="nickname-input profile-nickname-text"
+                        readOnly={!isEditingNickname}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          padding: '0.4rem 0.6rem',
+                          fontSize: '0.9rem',
+                          textAlign: 'center',
+                          outline: 'none',
+                          width: '100%',
+                          cursor: isEditingNickname ? 'text' : 'default',
+                          opacity: isEditingNickname ? 1 : 0.85
+                        }}
+                      />
+                    </div>
+                    <p style={{ position: 'absolute', bottom: '-1.3rem', color: '#ef4444', fontSize: '0.75rem', margin: 0, visibility: nicknameError ? 'visible' : 'hidden', width: '100%', textAlign: 'center' }}>
+                      {nicknameError || "안내 멘트 영역"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. 과거 백업 코드 데이터 이전 창구 (기존 유저용 접이식) */}
+                <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.85rem', width: '100%' }}>
+                  <button
+                    onClick={() => setShowLegacyBackup(!showLegacyBackup)}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline', width: '100%', textAlign: 'center' }}
+                  >
+                    {showLegacyBackup ? '▲ 과거 백업 코드 가져오기 닫기' : '▼ 과거 백업 코드로 데이터 가져오기'}
+                  </button>
+                  {showLegacyBackup && (
+                    <div style={{ marginTop: '0.8rem', background: 'rgba(30, 58, 138, 0.25)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                      <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: '0 0 0.5rem 0', textAlign: 'center', lineHeight: '1.4' }}>
+                        이전에 발급받은 8자리 백업 코드가 있다면 입력하여<br />기존 스트릭과 기록을 불러옵니다.
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                        <input
+                          type="text"
+                          value={recoverCode}
+                          onChange={handleRecoverCodeChange}
+                          placeholder="백업 코드 입력"
+                          className="nickname-input"
+                          maxLength={9}
+                          style={{ width: '140px', textTransform: 'uppercase', textAlign: 'center', fontSize: '0.8rem', padding: '0.35rem' }}
+                        />
+                        <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', borderRadius: '6px' }}>
+                          {isRecovering ? '가져오는 중...' : '불러오기'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
