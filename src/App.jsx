@@ -76,27 +76,38 @@ function App() {
   useEffect(() => {
     const initUser = async () => {
       const todayStr = getKSTDateString();
+      setIsAuthLoading(true);
       try {
-        setIsAuthLoading(true);
-        const userCredential = await signInAnonymously(auth);
-        const deviceId = userCredential.user.uid;
-
+        let deviceId = null;
         let activeDiscordUser = null;
 
         // 1. 디스코드 액티비티 환경인지 확인 (임베디드 iframe)
         if (isDiscordActivity()) {
+          setIsActivity(true);
           try {
-            setIsActivity(true);
             const activityResult = await initDiscordActivity();
             activeDiscordUser = activityResult.discordUser;
             setChannelId(activityResult.channelId);
             saveStoredDiscordUser(activeDiscordUser);
             setDiscordUser(activeDiscordUser);
+            deviceId = 'discord_' + activeDiscordUser.id;
           } catch (actErr) {
-            console.error("Discord Activity initialization error:", actErr);
+            console.warn("Discord Activity initialization notice:", actErr);
+            deviceId = localStorage.getItem('arrow_game_device_id') || ('activity_' + Math.random().toString(36).substring(2, 10));
           }
+          localStorage.setItem('arrow_game_device_id', deviceId);
         } else {
-          // 2. 일반 웹 브라우저 OAuth code 확인 (?code=xxxx)
+          // 2. 일반 웹 브라우저 환경: Firebase 익명 인증 시도 (실패 시 로컬 deviceId로 fallback)
+          try {
+            const userCredential = await signInAnonymously(auth);
+            deviceId = userCredential.user.uid;
+          } catch (authErr) {
+            console.warn("Firebase anonymous auth fallback:", authErr);
+            deviceId = localStorage.getItem('arrow_game_device_id') || ('web_' + Math.random().toString(36).substring(2, 10));
+          }
+          localStorage.setItem('arrow_game_device_id', deviceId);
+
+          // 웹 브라우저 OAuth code 확인 (?code=xxxx)
           const params = new URLSearchParams(window.location.search);
           const authCode = params.get('code');
           activeDiscordUser = getStoredDiscordUser();
@@ -219,8 +230,7 @@ function App() {
           }
         }
       } catch (error) {
-        console.error("Auth init failed:", error);
-        showToast(`인증 실패 [${error.code || 'ERROR'}]: ${error.message || '인증 서버 연결 실패'}`, "error");
+        console.warn("Auth init non-blocking notice:", error);
 
         // 인증 실패 시에도 로컬 플레이가 가능하도록 fallback 프로필 설정
         const fallbackLocal = loadSecureProfile();
