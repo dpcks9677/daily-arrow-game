@@ -912,9 +912,9 @@ const [showHelp, setShowHelp] = useState(false);
                           Activity
                         </div>
                       ) : (
-                        <button onClick={onDiscordLogout} className="discord-unlink-btn" title="계정 연동 해제">
-                          <LogOut size={15} />
-                          <span>해제</span>
+                        <button onClick={onDiscordLogout} className="discord-logout-btn" title="Discord 로그아웃">
+                          <LogOut size={14} />
+                          <span>로그아웃</span>
                         </button>
                       )}
                     </div>

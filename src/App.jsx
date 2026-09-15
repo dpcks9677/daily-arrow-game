@@ -234,7 +234,7 @@ function App() {
   };
 
   const handleDiscordLogout = () => {
-    if (!window.confirm("디스코드 계정 연결을 해제하시겠습니까?")) return;
+    if (!window.confirm("로그아웃 하시겠습니까?\n(클라우드에 저장된 스트릭과 기록은 다음 로그인 시 안전하게 복원됩니다)")) return;
     clearStoredDiscordUser();
     setDiscordUser(null);
     setUserProfile(prev => {
