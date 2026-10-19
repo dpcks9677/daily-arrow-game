@@ -15,6 +15,7 @@ dist-ssr
 .env.*
 !.env.example
 .dev.vars
+.wrangler
 
 # Editor directories and files
 .vscode/*

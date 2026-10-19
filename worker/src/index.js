@@ -1,3 +1,5 @@
+import { DurableObject } from 'cloudflare:workers';
+
 function parseFirestoreFields(fields) {
   if (!fields) return {};
   const result = {};
@@ -57,6 +59,81 @@ function toFirestoreFields(obj) {
   return fields;
 }
 
+// 방 단위 WebSocket 중계. 게임 중 진행도/실수를 폴링 없이 같은 방의 다른 플레이어에게 즉시 전달한다.
+// 상태는 저장하지 않으며(최종 결과의 기준은 RTDB), 연결이 끊겨도 클라이언트는 기존 폴링으로 동작한다.
+export class RoomRelay extends DurableObject {
+  async fetch(request) {
+    if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') {
+      return new Response('Expected WebSocket', { status: 426 });
+    }
+    const userId = (new URL(request.url).searchParams.get('user') || '').slice(0, 64);
+    if (!userId) {
+      return new Response('user is required', { status: 400 });
+    }
+
+    const { 0: client, 1: server } = new WebSocketPair();
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ userId });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  webSocketMessage(ws, message) {
+    if (typeof message !== 'string' || message.length > 512) return;
+    let data;
+    try {
+      data = JSON.parse(message);
+    } catch {
+      return;
+    }
+    const attachment = ws.deserializeAttachment();
+    if (!attachment || !data || typeof data !== 'object') return;
+
+    // 왕복 시간(RTT) 측정 및 연결 유지용
+    if (data.t === 'ping') {
+      ws.send(JSON.stringify({ t: 'pong', c: Number(data.c) || 0 }));
+      return;
+    }
+
+    if (data.t !== 'progress' && data.t !== 'mistake') return;
+    const num = (v) => (Number.isFinite(v) ? v : 0);
+    const clamp = (v, max) => Math.min(Math.max(num(v), 0), max);
+    const out = JSON.stringify({
+      t: data.t,
+      u: attachment.userId,
+      g: num(data.g), // 게임 라운드 식별자(방의 startedAt)
+      p: clamp(data.p, 50), // 진행도 (화살표 50개)
+      m: clamp(data.m, 9999), // 실수 횟수
+      s: num(data.s), // 흔들림 타임스탬프
+      at: num(data.at), // 보낸 시각(서버 시각 기준, 지연 계측용)
+    });
+    for (const peer of this.ctx.getWebSockets()) {
+      if (peer === ws) continue;
+      try {
+        peer.send(out);
+      } catch {
+        // 이미 닫힌 연결은 무시
+      }
+    }
+  }
+
+  webSocketClose(ws, code) {
+    try {
+      // 1005/1006/1015 같은 예약 코드는 close()에 쓸 수 없으므로 정상 종료(1000)로 바꾼다
+      ws.close(code >= 1000 && code <= 4999 && ![1004, 1005, 1006, 1015].includes(code) ? code : 1000);
+    } catch {
+      // 이미 닫힌 연결
+    }
+  }
+
+  webSocketError(ws) {
+    try {
+      ws.close(1011);
+    } catch {
+      // 이미 닫힌 연결
+    }
+  }
+}
+
 export default {
   async fetch(request, env) {
     const corsHeaders = {
@@ -71,6 +148,16 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // 0. Multiplayer WebSocket Relay (Durable Object, 방 단위)
+    // (디스코드 URL 매핑은 /api 접두사를 떼고 전달하므로 /ws 로 들어온다)
+    if (url.pathname === '/ws' || url.pathname.endsWith('/api/ws')) {
+      const roomId = url.searchParams.get('room') || '';
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(roomId)) {
+        return new Response('invalid room', { status: 400, headers: corsHeaders });
+      }
+      return env.ROOM_RELAY.get(env.ROOM_RELAY.idFromName(roomId)).fetch(request);
+    }
 
     // 1. Leaderboard Read Proxy
     if (url.pathname.includes('leaderboard')) {

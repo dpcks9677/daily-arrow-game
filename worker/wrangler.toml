@@ -5,3 +5,12 @@ compatibility_date = "2024-09-01"
 [vars]
 DISCORD_CLIENT_ID = "1549217749316804608"
 # DISCORD_CLIENT_SECRET은 `wrangler secret put DISCORD_CLIENT_SECRET`으로 등록 (로컬 개발은 .dev.vars)
+
+# 멀티플레이 WebSocket 중계 (방 단위 Durable Object)
+[[durable_objects.bindings]]
+name = "ROOM_RELAY"
+class_name = "RoomRelay"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomRelay"]
