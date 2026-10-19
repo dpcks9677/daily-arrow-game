@@ -11,6 +11,7 @@ import {
   getDiscordAvatarUrl 
 } from './discordAuth';
 import { isDiscordActivity, initDiscordActivity, getWorkerAuthHeaders } from './discordActivity';
+import { closeRoomConnection } from './activityRoom';
 
 import StartScreen from './components/StartScreen';
 import GameScreen from './components/GameScreen';
@@ -325,6 +326,12 @@ function App() {
       setDoc(doc(db, 'users', newProfile.id), updates, { merge: true }).catch(e => console.error("DB Sync error:", e));
     }
   };
+
+  // 멀티플레이 화면(로비/게임)을 벗어나면 방 WebSocket 연결을 닫는다 (서버가 재접속 유예 후 플레이어를 정리)
+  useEffect(() => {
+    const inMultiplayer = currentScreen === 'multiplayer' || (currentScreen === 'game' && !!multiplayerData);
+    if (!inMultiplayer) closeRoomConnection();
+  }, [currentScreen, multiplayerData]);
 
   const handleDiscordLogin = () => {
     const authUrl = getDiscordAuthUrl();

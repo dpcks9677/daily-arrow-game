@@ -3,11 +3,12 @@ import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, 
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateDailyArrows } from '../utils';
-import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom, subscribeRoom, getServerNow, getMultiplayerUserId, COUNTDOWN_DURATION_MS } from '../multiplayerUtils';
+import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom, subscribeRoom, getServerNow, getMultiplayerUserId, isWsRoomsMode, COUNTDOWN_DURATION_MS } from '../multiplayerUtils';
 import MultiplayerBoard from './MultiplayerBoard';
 import MobileDPad from './MobileDPad';
 import { isDiscordActivity } from '../discordActivity';
 import { openRoomSocket } from '../roomSocket';
+import { subscribeRoomEvents, subscribeRtt } from '../activityRoom';
 
 const LATENCY_FLAG_KEY = 'arrow_debug_latency';
 const LATENCY_SAMPLES = 30;
@@ -117,20 +118,33 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
   // 연결에 실패해도 위의 RTDB 폴링이 그대로 동작한다.
   useEffect(() => {
     if (!isDiscordActivity() || !roomId || !userId) return;
-    const socket = openRoomSocket(roomId, userId, {
-      onMessage: (m) => {
-        if (m.at > 0) {
-          const ms = getServerNow() - m.at;
-          if (Math.abs(ms) < 60000) {
-            latencyRef.current.ws = [...latencyRef.current.ws, ms].slice(-LATENCY_SAMPLES);
-          }
+    const onMessage = (m) => {
+      if (m.at > 0) {
+        const ms = getServerNow() - m.at;
+        if (Math.abs(ms) < 60000) {
+          latencyRef.current.ws = [...latencyRef.current.ws, ms].slice(-LATENCY_SAMPLES);
         }
-        setLive((prev) => {
-          const cur = prev[m.u];
-          const base = cur && cur.g === m.g ? cur : { g: m.g, p: 0, m: 0, s: 0 };
-          return { ...prev, [m.u]: { g: m.g, p: Math.max(base.p, m.p), m: Math.max(base.m, m.m), s: Math.max(base.s, m.s) } };
-        });
-      },
+      }
+      setLive((prev) => {
+        const cur = prev[m.u];
+        const base = cur && cur.g === m.g ? cur : { g: m.g, p: 0, m: 0, s: 0 };
+        return { ...prev, [m.u]: { g: m.g, p: Math.max(base.p, m.p), m: Math.max(base.m, m.m), s: Math.max(base.s, m.s) } };
+      });
+    };
+
+    // WebSocket 방 모드: 로비에서 맺은 방 연결을 그대로 쓰며, 진행도/실수 전송은 multiplayerUtils가 담당한다
+    if (isWsRoomsMode()) {
+      const unsubscribeEvents = subscribeRoomEvents(onMessage);
+      const unsubscribeRtt = subscribeRtt((ms) => { latencyRef.current.rtt = ms; });
+      return () => {
+        unsubscribeEvents();
+        unsubscribeRtt();
+      };
+    }
+
+    // 기존 방식(RTDB 프록시): 상대 진행도 즉시 수신용 보조 WebSocket
+    const socket = openRoomSocket(roomId, userId, {
+      onMessage,
       onRtt: (ms) => { latencyRef.current.rtt = ms; },
     });
     socketRef.current = socket;

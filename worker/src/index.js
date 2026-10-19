@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { join, setReady, startGame, applyProgress, applyMistake, finishGame, giveUp, playAgain, leave, removePlayer } from './room.js';
 
 function parseFirestoreFields(fields) {
   if (!fields) return {};
@@ -231,12 +232,34 @@ function parseRtdbPath(rawPath) {
   return null;
 }
 
-// 방 단위 WebSocket 중계. 게임 중 진행도/실수를 폴링 없이 같은 방의 다른 플레이어에게 즉시 전달한다.
-// 상태는 저장하지 않으며(최종 결과의 기준은 RTDB), 연결이 끊겨도 클라이언트는 기존 폴링으로 동작한다.
+// 방 단위 Durable Object. 방 상태(참가자, 준비, 시작, 진행도, 결과)의 기준이며 WebSocket으로 모든 참가자에게 중계한다.
+// 상태 변경은 모두 이 객체 안에서 검증하므로(방장만 시작, 본인 항목만 수정 등) 클라이언트가 RTDB를 직접 쓰지 않는다.
+// 구조적 변경(참가/준비/시작/완료 등)만 저장소에 기록하고, 진행도는 메모리에만 두어 쓰기 횟수를 줄인다.
 const MAX_SOCKETS_PER_ROOM = 8;
 const MAX_MESSAGES_PER_SECOND = 40;
+const MAX_MESSAGE_LENGTH = 1024;
+// 연결이 끊긴 플레이어를 정리하기 전 재접속을 기다리는 시간
+const DISCONNECT_GRACE_MS = 8000;
+
+function randomSeed() {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => (b % 36).toString(36)).join('');
+}
 
 export class RoomRelay extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.room = null;
+    this.disconnected = {};
+    this.rate = new WeakMap();
+    // 하이버네이션 후 깨어날 때 저장된 방 상태를 복원한다
+    ctx.blockConcurrencyWhile(async () => {
+      this.room = (await ctx.storage.get('room')) || null;
+      this.disconnected = (await ctx.storage.get('disconnected')) || {};
+    });
+  }
+
   async fetch(request) {
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') {
       return new Response('Expected WebSocket', { status: 426 });
@@ -256,12 +279,32 @@ export class RoomRelay extends DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(ws, message) {
-    if (typeof message !== 'string' || message.length > 512) return;
+  broadcast(payload, except) {
+    const out = JSON.stringify(payload);
+    for (const peer of this.ctx.getWebSockets()) {
+      if (peer === except) continue;
+      try {
+        peer.send(out);
+      } catch {
+        // 이미 닫힌 연결은 무시
+      }
+    }
+  }
 
-    // 연결당 초당 메시지 수 제한 (인스턴스가 재시작되면 초기화되므로 best-effort)
+  async saveRoom() {
+    if (this.room) await this.ctx.storage.put('room', this.room);
+    else await this.ctx.storage.delete('room');
+  }
+
+  async saveDisconnected() {
+    await this.ctx.storage.put('disconnected', this.disconnected);
+  }
+
+  async webSocketMessage(ws, message) {
+    if (typeof message !== 'string' || message.length > MAX_MESSAGE_LENGTH) return;
+
+    // 연결당 초당 메시지 수 제한
     const now = Date.now();
-    this.rate = this.rate || new WeakMap();
     let state = this.rate.get(ws);
     if (!state || now - state.start >= 1000) {
       state = { start: now, count: 0 };
@@ -278,50 +321,156 @@ export class RoomRelay extends DurableObject {
     }
     const attachment = ws.deserializeAttachment();
     if (!attachment || !data || typeof data !== 'object') return;
+    const me = attachment.userId;
 
-    // 왕복 시간(RTT) 측정 및 연결 유지용
+    // 왕복 시간(RTT) 측정, 연결 유지, 서버 시각 동기화(ts)
     if (data.t === 'ping') {
-      ws.send(JSON.stringify({ t: 'pong', c: Number(data.c) || 0 }));
+      ws.send(JSON.stringify({ t: 'pong', c: Number(data.c) || 0, ts: now }));
       return;
     }
 
-    if (data.t !== 'progress' && data.t !== 'mistake') return;
-    const num = (v) => (Number.isFinite(v) ? v : 0);
-    const clamp = (v, max) => Math.min(Math.max(num(v), 0), max);
-    const out = JSON.stringify({
-      t: data.t,
-      u: attachment.userId,
-      g: num(data.g), // 게임 라운드 식별자(방의 startedAt)
-      p: clamp(data.p, 50), // 진행도 (화살표 50개)
-      m: clamp(data.m, 9999), // 실수 횟수
-      s: num(data.s), // 흔들림 타임스탬프
-      at: num(data.at), // 보낸 시각(서버 시각 기준, 지연 계측용)
-    });
-    for (const peer of this.ctx.getWebSockets()) {
-      if (peer === ws) continue;
-      try {
-        peer.send(out);
-      } catch {
-        // 이미 닫힌 연결은 무시
-      }
+    const reply = (error) => {
+      if (data.id === undefined) return;
+      ws.send(JSON.stringify(error ? { t: 'error', id: data.id, message: error } : { t: 'ack', id: data.id }));
+    };
+
+    // 진행도/실수: 상태에 반영하고 다른 참가자에게 즉시 중계 (저장은 하지 않는다)
+    if (data.t === 'progress' || data.t === 'mistake') {
+      if (!this.room) return;
+      const changed =
+        data.t === 'progress' ? applyProgress(this.room, me, data, now) : applyMistake(this.room, me, data, now);
+      if (!changed) return;
+      const player = this.room.players[me];
+      this.broadcast(
+        {
+          t: data.t,
+          u: me,
+          g: this.room.startedAt || 0, // 게임 라운드 식별자(방의 startedAt)
+          p: player.progress || 0,
+          m: player.mistakes || 0,
+          s: player.shake || 0,
+          at: Number.isFinite(data.at) ? data.at : 0, // 보낸 시각(서버 시각 기준, 지연 계측용)
+        },
+        ws
+      );
+      return;
     }
+
+    const noRoom = { room: null, error: '존재하지 않는 방입니다.' };
+    let result;
+    switch (data.t) {
+      case 'join':
+        result = join(this.room, me, data, now, randomSeed());
+        break;
+      case 'ready':
+        result = this.room ? setReady(this.room, me, data.v) : noRoom;
+        break;
+      case 'start':
+        result = this.room ? startGame(this.room, me, now, randomSeed()) : noRoom;
+        break;
+      case 'finish':
+        result = this.room ? finishGame(this.room, me, data, now) : noRoom;
+        break;
+      case 'giveup':
+        result = this.room ? giveUp(this.room, me, now) : noRoom;
+        break;
+      case 'replay':
+        result = this.room ? playAgain(this.room, me, data.nickname, now) : noRoom;
+        break;
+      case 'leave':
+        result = this.room ? leave(this.room, me, typeof data.target === 'string' ? data.target : undefined, now) : { room: null };
+        break;
+      default:
+        return;
+    }
+
+    if (result.error) {
+      reply(result.error);
+      return;
+    }
+
+    this.room = result.room;
+    if (data.t === 'join' && this.disconnected[me]) {
+      delete this.disconnected[me];
+      await this.saveDisconnected();
+    }
+    await this.saveRoom();
+    reply();
+    this.broadcast({ t: 'state', room: this.room });
+    if (!this.room) await this.ctx.storage.deleteAll();
   }
 
-  webSocketClose(ws, code) {
+  async webSocketClose(ws, code) {
     try {
       // 1005/1006/1015 같은 예약 코드는 close()에 쓸 수 없으므로 정상 종료(1000)로 바꾼다
       ws.close(code >= 1000 && code <= 4999 && ![1004, 1005, 1006, 1015].includes(code) ? code : 1000);
     } catch {
       // 이미 닫힌 연결
     }
+    await this.handleDisconnect(ws);
   }
 
-  webSocketError(ws) {
+  async webSocketError(ws) {
     try {
       ws.close(1011);
     } catch {
       // 이미 닫힌 연결
     }
+    await this.handleDisconnect(ws);
+  }
+
+  // 같은 사용자의 다른 연결이 없으면 재접속 유예 시간을 두고 정리 대상으로 표시한다
+  async handleDisconnect(ws) {
+    const me = ws.deserializeAttachment()?.userId;
+    if (!me || !this.room?.players[me]) return;
+    const stillConnected = this.ctx
+      .getWebSockets()
+      .some((peer) => peer !== ws && peer.deserializeAttachment()?.userId === me);
+    if (stillConnected) return;
+    this.disconnected[me] = Date.now();
+    await this.saveDisconnected();
+    await this.ctx.storage.setAlarm(Date.now() + DISCONNECT_GRACE_MS);
+  }
+
+  async alarm() {
+    const now = Date.now();
+    const connected = new Set(this.ctx.getWebSockets().map((peer) => peer.deserializeAttachment()?.userId));
+    let changed = false;
+    let pending = false;
+
+    for (const [me, since] of Object.entries(this.disconnected)) {
+      if (connected.has(me) || !this.room?.players[me]) {
+        delete this.disconnected[me];
+        continue;
+      }
+      if (now - since < DISCONNECT_GRACE_MS - 500) {
+        pending = true;
+        continue;
+      }
+      delete this.disconnected[me];
+      changed = true;
+      if (this.room.status === 'waiting') {
+        this.room = removePlayer(this.room, me);
+        if (!this.room) break;
+      } else {
+        this.room.players[me].isDisconnected = true;
+      }
+    }
+
+    // 아무도 접속해 있지 않으면 방을 정리한다
+    if (this.ctx.getWebSockets().length === 0) this.room = null;
+
+    if (changed || !this.room) {
+      await this.saveRoom();
+      this.broadcast({ t: 'state', room: this.room });
+    }
+    if (!this.room) {
+      await this.ctx.storage.deleteAll();
+      this.disconnected = {};
+      return;
+    }
+    await this.saveDisconnected();
+    if (pending) await this.ctx.storage.setAlarm(now + DISCONNECT_GRACE_MS);
   }
 }
 

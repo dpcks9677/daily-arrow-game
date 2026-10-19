@@ -2,6 +2,24 @@ import { ref, set, get, update, remove, onValue, onDisconnect, serverTimestamp }
 import { rtdb } from "./firebase";
 import { isDiscordActivity, getWorkerAuthHeaders } from "./discordActivity";
 import { isRelayHealthy } from "./roomSocket";
+import {
+  enterRoom,
+  requestRoom,
+  sendRoom,
+  getLatestRoom,
+  getCurrentRoomId,
+  subscribeRoomState,
+  measureServerOffset,
+} from "./activityRoom";
+
+// 디스코드 액티비티의 방 상태를 Worker(Durable Object)의 WebSocket으로 관리한다.
+// 문제가 생기면 빌드 환경변수 VITE_ACTIVITY_WS_ROOMS=0 으로 기존 RTDB 프록시 방식으로 되돌릴 수 있다.
+const USE_WS_ROOMS = import.meta.env.VITE_ACTIVITY_WS_ROOMS !== '0';
+
+/** 현재 환경이 WebSocket 방 모드(디스코드 액티비티)인지 */
+export function isWsRoomsMode() {
+  return USE_WS_ROOMS && isDiscordActivity();
+}
 
 // ============================================================
 // 카운트다운 상수 (서버 타임스탬프 기반 동기화용)
@@ -22,7 +40,12 @@ let _clockOffsetMeasured = false;
 export async function measureClockOffset() {
   if (_clockOffsetMeasured) return _clockOffset;
   try {
-    if (isDiscordActivity()) {
+    if (isWsRoomsMode()) {
+      // 방 WebSocket의 ping/pong으로 서버 시각 차이를 측정 (연결 전이면 다음 호출에서 다시 시도)
+      const offset = await measureServerOffset();
+      if (typeof offset !== 'number') return _clockOffset;
+      _clockOffset = offset;
+    } else if (isDiscordActivity()) {
       // 프록시를 통해 서버 타임스탬프를 기록하고 읽어 차이를 계산
       const before = Date.now();
       await rtdbFetch('_clock_sync/probe', 'PUT', {".sv": "timestamp"});
@@ -133,6 +156,9 @@ async function rtdbFetch(path, method = 'GET', data = undefined) {
  */
 export async function getRoomData(roomId) {
   if (!roomId) return null;
+  if (isWsRoomsMode()) {
+    return getCurrentRoomId() === roomId ? (getLatestRoom() ?? null) : null;
+  }
   if (isDiscordActivity()) {
     try {
       return await rtdbFetch(`rooms/${roomId}`, 'GET');
@@ -157,6 +183,9 @@ export async function getRoomData(roomId) {
  */
 export async function getRoomPlayers(roomId) {
   if (!roomId) return {};
+  if (isWsRoomsMode()) {
+    return (getCurrentRoomId() === roomId && getLatestRoom()?.players) || {};
+  }
   if (isDiscordActivity()) {
     try {
       const players = await rtdbFetch(`rooms/${roomId}/players`, 'GET');
@@ -187,6 +216,12 @@ export function subscribeRoom(roomId, callback, options = {}) {
     playingIntervalMs = 250,  // 게임 중 폴링 주기 (방법 B)
     waitingIntervalMs = 600   // 대기 중 폴링 주기
   } = typeof options === 'number' ? { waitingIntervalMs: options } : options;
+
+  if (isWsRoomsMode()) {
+    // 방 상태는 Worker가 WebSocket으로 밀어준다 (폴링 없음). 연결된 방이 아니면 아무것도 전달하지 않는다.
+    if (getCurrentRoomId() !== roomId) return () => {};
+    return subscribeRoomState(callback);
+  }
 
   if (isDiscordActivity()) {
     // === 방법 C: Discord URL Mapping WebSocket 프록시 시도 ===
@@ -290,6 +325,20 @@ export async function createRoom(hostUserId, hostNickname) {
     }
   };
 
+  if (isWsRoomsMode()) {
+    // 방 코드가 이미 사용 중이면 새 코드로 몇 번 더 시도한다
+    let code = roomId;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await enterRoom(code, finalUserId, { nickname: finalNickname, create: true });
+        return code;
+      } catch (e) {
+        if (attempt >= 2 || !String(e.message).includes('이미 사용 중인')) throw e;
+        code = generateRoomCode();
+      }
+    }
+  }
+
   if (isDiscordActivity()) {
     await rtdbFetch(`rooms/${roomId}`, 'PUT', roomData);
     return roomId;
@@ -318,6 +367,12 @@ export async function getOrCreateVoiceChannelRoom(channelId, userId, nickname) {
   const safeChannel = channelId.replace(/[^a-zA-Z0-9]/g, '');
   const roomId = `VC${safeChannel.slice(-6).toUpperCase()}`;
   const finalNickname = nickname || 'Player';
+
+  if (isWsRoomsMode()) {
+    // 방이 없거나 끝났으면 새로 만들고, 있으면 참가한다 (정원/진행 중 여부는 서버가 판단)
+    await enterRoom(roomId, userId, { nickname: finalNickname, voice: true, channelId });
+    return roomId;
+  }
 
   const currentRoom = await getRoomData(roomId);
 
@@ -400,6 +455,11 @@ export async function getOrCreateVoiceChannelRoom(channelId, userId, nickname) {
 
 // 방 입장 (Guest)
 export async function joinRoom(roomId, userId, nickname) {
+  if (isWsRoomsMode()) {
+    await enterRoom(roomId, userId, { nickname });
+    return roomId;
+  }
+
   const roomData = await getRoomData(roomId);
 
   if (!roomData) {
@@ -457,7 +517,9 @@ export async function joinRoom(roomId, userId, nickname) {
 
 // 준비 상태 토글
 export async function toggleReady(roomId, userId, isReady) {
-  if (isDiscordActivity()) {
+  if (isWsRoomsMode()) {
+    await requestRoom({ t: 'ready', v: isReady });
+  } else if (isDiscordActivity()) {
     await rtdbFetch(`rooms/${roomId}/players/${userId}`, 'PATCH', { isReady });
   } else {
     const playerRef = ref(rtdb, `rooms/${roomId}/players/${userId}`);
@@ -467,6 +529,12 @@ export async function toggleReady(roomId, userId, isReady) {
 
 // 방 나가기
 export async function leaveRoom(roomId, userId) {
+  if (isWsRoomsMode()) {
+    // 연결이 이미 끊겼다면 서버가 재접속 유예 시간 뒤 정리하므로 실패해도 무시한다
+    await requestRoom({ t: 'leave', target: userId }).catch((e) => console.warn('leaveRoom:', e.message));
+    return;
+  }
+
   const roomData = await getRoomData(roomId);
   
   if (roomData) {
@@ -515,6 +583,11 @@ export async function leaveRoom(roomId, userId) {
 
 // 게임 시작 (방법 A: 서버 타임스탬프 기반)
 export async function startGame(roomId) {
+  if (isWsRoomsMode()) {
+    await requestRoom({ t: 'start' });
+    return;
+  }
+
   const randomSeed = Math.random().toString(36).substring(2, 10);
 
   if (isDiscordActivity()) {
@@ -564,6 +637,10 @@ let pendingProgressAt = 0;
 let isUpdatingProgress = false;
 
 export async function updateProgress(roomId, userId, progress) {
+  if (isWsRoomsMode()) {
+    sendRoom({ t: 'progress', p: progress, at: getServerNow() });
+    return;
+  }
   if (isDiscordActivity()) {
     pendingProgress = progress;
     pendingProgressAt = getServerNow(); // 입력 시각 (폴링 경로 지연 계측용)
@@ -597,7 +674,9 @@ export async function triggerMistake(roomId, userId, currentMistakes, shakeAt = 
     mistakes: currentMistakes,
     shake: shakeAt
   };
-  if (isDiscordActivity()) {
+  if (isWsRoomsMode()) {
+    sendRoom({ t: 'mistake', m: currentMistakes, s: shakeAt, at: getServerNow() });
+  } else if (isDiscordActivity()) {
     await rtdbFetch(`rooms/${roomId}/players/${userId}`, 'PATCH', mistakeData).catch(() => {});
   } else {
     const playerRef = ref(rtdb, `rooms/${roomId}/players/${userId}`);
@@ -607,6 +686,12 @@ export async function triggerMistake(roomId, userId, currentMistakes, shakeAt = 
 
 // 개인 게임 완료 (Rank 배정 로직 포함)
 export async function finishGame(roomId, userId, finalTime, mistakes) {
+  if (isWsRoomsMode()) {
+    // 순위는 서버가 완료 순서대로 매긴다
+    await requestRoom({ t: 'finish', time: finalTime, mistakes });
+    return;
+  }
+
   const roomData = await getRoomData(roomId);
   if (!roomData) return;
 
@@ -637,6 +722,11 @@ export async function finishGame(roomId, userId, finalTime, mistakes) {
 
 // 자발적 게임 포기
 export async function giveUpGame(roomId, userId) {
+  if (isWsRoomsMode()) {
+    await requestRoom({ t: 'giveup' }).catch((e) => console.warn('giveUpGame:', e.message));
+    return;
+  }
+
   const roomData = await getRoomData(roomId);
   if (!roomData) return;
   
@@ -659,6 +749,11 @@ export async function giveUpGame(roomId, userId) {
 
 // 로비로 돌아가기 (다시하기)
 export async function playAgain(roomId, userId, nickname) {
+  if (isWsRoomsMode()) {
+    await requestRoom({ t: 'replay', nickname }).catch((e) => console.warn('playAgain:', e.message));
+    return;
+  }
+
   const roomData = await getRoomData(roomId);
   if (!roomData) return;
 
