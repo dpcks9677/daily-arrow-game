@@ -538,18 +538,21 @@ export async function startGame(roomId) {
 
 // 인게임 진행도 실시간 전송 (Coalesced Batching)
 let pendingProgress = null;
+let pendingProgressAt = 0;
 let isUpdatingProgress = false;
 
 export async function updateProgress(roomId, userId, progress) {
   if (isDiscordActivity()) {
     pendingProgress = progress;
+    pendingProgressAt = getServerNow(); // 입력 시각 (폴링 경로 지연 계측용)
     if (isUpdatingProgress) return;
     isUpdatingProgress = true;
     try {
       while (pendingProgress !== null) {
         const toSend = pendingProgress;
+        const sentAt = pendingProgressAt;
         pendingProgress = null;
-        await rtdbFetch(`rooms/${roomId}/players/${userId}`, 'PATCH', { progress: toSend });
+        await rtdbFetch(`rooms/${roomId}/players/${userId}`, 'PATCH', { progress: toSend, progressAt: sentAt });
       }
     } catch (e) {
       console.warn("updateProgress error:", e);
@@ -563,10 +566,10 @@ export async function updateProgress(roomId, userId, progress) {
 }
 
 // 인게임 실수(오답) 전송
-export async function triggerMistake(roomId, userId, currentMistakes) {
-  const mistakeData = { 
+export async function triggerMistake(roomId, userId, currentMistakes, shakeAt = Date.now()) {
+  const mistakeData = {
     mistakes: currentMistakes,
-    shake: Date.now()
+    shake: shakeAt
   };
   if (isDiscordActivity()) {
     await rtdbFetch(`rooms/${roomId}/players/${userId}`, 'PATCH', mistakeData).catch(() => {});

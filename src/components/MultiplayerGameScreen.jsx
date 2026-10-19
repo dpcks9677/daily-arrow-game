@@ -6,6 +6,22 @@ import { generateDailyArrows } from '../utils';
 import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom, subscribeRoom, getServerNow, COUNTDOWN_DURATION_MS } from '../multiplayerUtils';
 import MultiplayerBoard from './MultiplayerBoard';
 import MobileDPad from './MobileDPad';
+import { isDiscordActivity } from '../discordActivity';
+import { openRoomSocket } from '../roomSocket';
+
+const LATENCY_FLAG_KEY = 'arrow_debug_latency';
+const LATENCY_SAMPLES = 30;
+
+// 지연 계측: 최근 샘플의 평균/최대 (ms)
+function summarizeSamples(samples) {
+  if (samples.length === 0) return null;
+  const sum = samples.reduce((a, b) => a + b, 0);
+  return { n: samples.length, avg: Math.round(sum / samples.length), max: Math.round(Math.max(...samples)) };
+}
+
+function formatSamples(stat) {
+  return stat ? `${stat.avg}ms (최대 ${stat.max}, ${stat.n}건)` : '--';
+}
 
 export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, multiplayerData, saveProfile }) {
   const { roomId, seed } = multiplayerData;
@@ -37,6 +53,18 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
   const statsSavedRef = useRef(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
+  // 디스코드 액티비티: WebSocket으로 폴링보다 먼저 받은 상대 상태 (key: 상대 userId)
+  const [live, setLive] = useState({});
+  const socketRef = useRef(null);
+  // 지연 계측 (진행 카운터를 5번 연속 탭하면 표시)
+  const latencyRef = useRef({ ws: [], poll: [], rtt: null });
+  const polledProgressRef = useRef({});
+  const tapsRef = useRef([]);
+  const [showLatency, setShowLatency] = useState(() => {
+    try { return localStorage.getItem(LATENCY_FLAG_KEY) === '1'; } catch { return false; }
+  });
+  const [latencyStats, setLatencyStats] = useState(null);
+
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -61,7 +89,19 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
       }
 
       setRoomData(data);
-        
+
+      // 폴링 경로 지연 계측: 상대 진행도가 늘어난 순간, 상대가 입력한 시각(progressAt)과의 차이
+      for (const [id, p] of Object.entries(data.players || {})) {
+        if (id === userId) continue;
+        if ((p.progress || 0) > (polledProgressRef.current[id] || 0) && p.progressAt) {
+          const ms = getServerNow() - p.progressAt;
+          if (Math.abs(ms) < 60000) {
+            latencyRef.current.poll = [...latencyRef.current.poll, ms].slice(-LATENCY_SAMPLES);
+          }
+        }
+        polledProgressRef.current[id] = p.progress || 0;
+      }
+
       // Check if all players are finished or disconnected
       const players = data.players || {};
       const allDone = Object.values(players).every(p => p.finishedAt !== null || p.isDisconnected);
@@ -72,6 +112,70 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
     return () => unsubscribe();
   }, [roomId, gameStatus, onHome, userId]);
+
+  // 디스코드 액티비티: 방 단위 WebSocket 중계로 상대의 진행도/실수를 폴링보다 먼저 받는다.
+  // 연결에 실패해도 위의 RTDB 폴링이 그대로 동작한다.
+  useEffect(() => {
+    if (!isDiscordActivity() || !roomId || !userId) return;
+    const socket = openRoomSocket(roomId, userId, {
+      onMessage: (m) => {
+        if (m.at > 0) {
+          const ms = getServerNow() - m.at;
+          if (Math.abs(ms) < 60000) {
+            latencyRef.current.ws = [...latencyRef.current.ws, ms].slice(-LATENCY_SAMPLES);
+          }
+        }
+        setLive((prev) => {
+          const cur = prev[m.u];
+          const base = cur && cur.g === m.g ? cur : { g: m.g, p: 0, m: 0, s: 0 };
+          return { ...prev, [m.u]: { g: m.g, p: Math.max(base.p, m.p), m: Math.max(base.m, m.m), s: Math.max(base.s, m.s) } };
+        });
+      },
+      onRtt: (ms) => { latencyRef.current.rtt = ms; },
+    });
+    socketRef.current = socket;
+    return () => {
+      socket.close();
+      socketRef.current = null;
+    };
+  }, [roomId, userId]);
+
+  // 보드에는 RTDB 데이터에 WebSocket으로 먼저 받은 값을 덮어 표시 (진행도/실수/흔들림은 항상 증가하므로 max 병합)
+  const boardData = useMemo(() => {
+    if (!roomData?.players) return roomData;
+    const players = { ...roomData.players };
+    for (const [id, l] of Object.entries(live)) {
+      const p = players[id];
+      if (!p || id === userId || l.g !== roomData.startedAt) continue;
+      players[id] = {
+        ...p,
+        progress: Math.max(p.progress || 0, l.p),
+        mistakes: Math.max(p.mistakes || 0, l.m),
+        shake: Math.max(p.shake || 0, l.s),
+      };
+    }
+    return { ...roomData, players };
+  }, [roomData, live, userId]);
+
+  // 지연 계측 표시 갱신 (켜져 있을 때만)
+  useEffect(() => {
+    if (!showLatency) return;
+    const timer = setInterval(() => {
+      const { ws, poll, rtt } = latencyRef.current;
+      setLatencyStats({ ws: summarizeSamples(ws), poll: summarizeSamples(poll), rtt });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [showLatency]);
+
+  const handleProgressTap = () => {
+    const now = Date.now();
+    tapsRef.current = [...tapsRef.current.filter((t) => now - t < 2000), now];
+    if (tapsRef.current.length < 5) return;
+    tapsRef.current = [];
+    const next = !showLatency;
+    setShowLatency(next);
+    try { localStorage.setItem(LATENCY_FLAG_KEY, next ? '1' : '0'); } catch { /* 저장 실패는 무시 */ }
+  };
 
   // 서버 타임스탬프 기반 카운트다운 (방법 A)
   // roomData.startedAt (서버 시각)을 기준으로 남은 시간을 매 프레임 역산하여
@@ -162,6 +266,8 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
     }
   }, [isAllFinished, roomData, userProfile, saveProfile, userId, roomId, seed]);
 
+  const gameId = roomData?.startedAt || 0; // 라운드 식별자: 이전 라운드의 WebSocket 값이 섞이지 않게 함
+
   const processInput = useCallback((key) => {
     if (isStunnedRef.current || gameStatusRef.current !== 'playing') return;
     
@@ -171,8 +277,9 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
       const nextIndex = currentIndexRef.current + 1;
       setCurrentIndex(nextIndex);
       
-      // Update progress in RTDB
+      // Update progress in RTDB (+ 디스코드 액티비티는 WebSocket으로 즉시 중계)
       updateProgress(roomId, userId, nextIndex).catch(console.error);
+      if (socketRef.current) socketRef.current.send({ t: 'progress', g: gameId, p: nextIndex, at: getServerNow() });
 
       if (nextIndex >= arrows.length) {
         setGameStatus('finished');
@@ -184,14 +291,16 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
       const newMistakes = mistakesRef.current + 1;
       setMistakes(newMistakes);
       
-      // Trigger mistake in RTDB for shake animation
-      triggerMistake(roomId, userId, newMistakes).catch(console.error);
+      // Trigger mistake in RTDB for shake animation (RTDB와 WebSocket에 같은 shake 값을 보내 이중 흔들림 방지)
+      const shakeAt = Date.now();
+      triggerMistake(roomId, userId, newMistakes, shakeAt).catch(console.error);
+      if (socketRef.current) socketRef.current.send({ t: 'mistake', g: gameId, m: newMistakes, s: shakeAt, at: getServerNow() });
 
       setTimeout(() => {
         setIsStunned(false);
       }, 500);
     }
-  }, [arrows, startTime, roomId, userId, setCurrentIndex, setGameStatus, setIsStunned, setMistakes]);
+  }, [arrows, startTime, roomId, userId, gameId, setCurrentIndex, setGameStatus, setIsStunned, setMistakes]);
 
   const handleKeyDown = useCallback((e) => {
     const key = e.key;
@@ -258,7 +367,7 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
         <div className="status-bar">
           <div className="timer">{(timeElapsed / 1000).toFixed(2)}s</div>
-          <div className="progress">{currentIndex} / {arrows.length}</div>
+          <div className="progress" onClick={handleProgressTap}>{currentIndex} / {arrows.length}</div>
         </div>
         
         <div className="grid-container" style={{ position: 'relative' }}>
@@ -316,7 +425,15 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
         <MobileDPad onDirectionPress={processInput} />
 
         {/* Multiplayer Board (Mini Grid) */}
-        <MultiplayerBoard roomData={roomData} myUserId={userId} />
+        <MultiplayerBoard roomData={boardData} myUserId={userId} />
+
+        {showLatency && (
+          <div style={{ position: 'fixed', left: 8, bottom: 8, zIndex: 9999, padding: '6px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.75)', color: '#a7f3d0', fontSize: 12, fontFamily: 'monospace', lineHeight: 1.5, pointerEvents: 'none' }}>
+            <div>WebSocket {latencyStats ? formatSamples(latencyStats.ws) : '--'}</div>
+            <div>폴링 {latencyStats ? formatSamples(latencyStats.poll) : '--'}</div>
+            <div>WS 왕복 {latencyStats?.rtt != null ? `${Math.round(latencyStats.rtt)}ms` : '연결 안 됨'}</div>
+          </div>
+        )}
 
         {/* Result Modal */}
         {gameStatus === 'finished' && (
