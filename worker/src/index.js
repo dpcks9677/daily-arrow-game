@@ -1,4 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
+import { signToken, verifyToken, verifyFirebaseIdToken, getServiceAccountToken } from './auth.js';
+import { generateArrows, verifyRun } from './score.js';
 import { join, setReady, startGame, applyProgress, applyMistake, finishGame, giveUp, playAgain, leave, removePlayer } from './room.js';
 
 function parseFirestoreFields(fields) {
@@ -73,6 +75,13 @@ const DISCORD_ID_PATTERN = /^\d{5,25}$/;
 const ROOM_ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
 const SEED_PATTERN = /^\d{8}$/;
 
+// 클라이언트 시간대 차이(±14시간)를 고려해 오늘 기준 ±2일 이내의 8자리 날짜 시드만 허용한다
+function isValidSeed(seed) {
+  if (typeof seed !== 'string' || !SEED_PATTERN.test(seed)) return false;
+  const seedDate = Date.UTC(Number(seed.slice(0, 4)), Number(seed.slice(4, 6)) - 1, Number(seed.slice(6, 8)));
+  return !Number.isNaN(seedDate) && Math.abs(seedDate - Date.now()) <= 2 * 24 * 60 * 60 * 1000;
+}
+
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://daily-arrow.web.app',
   'https://daily-arrow.firebaseapp.com',
@@ -96,7 +105,7 @@ function buildCorsHeaders(request, env) {
     'Access-Control-Allow-Origin': origin,
     'Vary': 'Origin',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-HTTP-Method-Override',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-HTTP-Method-Override, X-Session, X-Firebase-Token',
     'Access-Control-Max-Age': '86400',
   };
 }
@@ -157,6 +166,40 @@ async function verifyDiscordToken(token) {
 function getBearerToken(request) {
   const header = request.headers.get('Authorization') || '';
   return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+}
+
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const ROUND_TTL_MS = 6 * 60 * 60 * 1000;
+// 첫 입력부터 서버가 라운드 토큰을 발급하기까지의 지연(네트워크)을 허용하는 시간
+const ROUND_ELAPSED_SLACK_MS = 3000;
+
+// 요청자의 신원을 서버에서 확인한다.
+//  - Authorization: Bearer <Discord access_token>   (Discord Activity)
+//  - X-Session: <Worker가 발급한 세션 토큰>          (웹에서 Discord 로그인한 사용자)
+//  - X-Firebase-Token: <Firebase 익명 로그인 ID 토큰> (웹 게스트)
+// key는 점수/라운드에 쓰는 신원 식별자다. (Discord 사용자는 discord_<id>, 게스트는 Firebase uid)
+async function authenticate(request, env) {
+  let discordId = await verifyDiscordToken(getBearerToken(request));
+  let sessionUid = null;
+  const session = request.headers.get('X-Session');
+  if (!discordId && session) {
+    const payload = await verifyToken(env.SESSION_SECRET, session);
+    if (payload && DISCORD_ID_PATTERN.test(String(payload.d))) {
+      discordId = String(payload.d);
+      sessionUid = typeof payload.u === 'string' ? payload.u : null;
+    }
+  }
+  let uid = null;
+  const idToken = request.headers.get('X-Firebase-Token');
+  if (idToken) uid = (await verifyFirebaseIdToken(idToken))?.uid || null;
+  if (!uid) uid = sessionUid;
+  return { discordId, uid, key: discordId ? `discord_${discordId}` : uid };
+}
+
+// 서비스 계정 권한으로 Firestore REST를 호출한다 (규칙이 클라이언트 쓰기를 막으므로 쓰기는 모두 여기를 거친다)
+async function firestoreAdminFetch(env, url, init = {}) {
+  const token = await getServiceAccountToken(env);
+  return fetch(url, { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` } });
 }
 
 // 문자열 길이 제한 + 제어문자 제거
@@ -566,65 +609,89 @@ export default {
       }
     }
 
-    // 2. Score Save Proxy
+    // 2-a. 라운드 시작 (첫 입력 시 호출). 서버가 시작 시각을 서명한 토큰으로 발급한다.
+    if (url.pathname.includes('start-round')) {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      try {
+        const identity = await authenticate(request, env);
+        if (!identity.key) return json({ error: 'Unauthorized' }, 401);
+        if (!env.SESSION_SECRET) return json({ error: 'Server is not configured' }, 503);
+        if (await isLimited(env, 'RL_PROFILE', `round:${identity.key}`, 60, 60 * 1000)) {
+          return json({ error: 'Too many requests' }, 429);
+        }
+        const parsed = await readJsonBody(request);
+        if (parsed.tooLarge) return json({ error: 'Payload too large' }, 413);
+        if (parsed.invalid || !isPlainObject(parsed.value)) return json({ error: 'Invalid JSON' }, 400);
+        const seed = parsed.value.seed;
+        if (!isValidSeed(seed)) return json({ error: 'Invalid seed' }, 400);
+
+        const nonce = Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => b.toString(16).padStart(2, '0')).join('');
+        const startedAt = Date.now();
+        const round = await signToken(env.SESSION_SECRET, { typ: 'round', k: identity.key, s: seed, t: startedAt, n: nonce }, ROUND_TTL_MS);
+        return json({ success: true, round, serverNow: startedAt });
+      } catch {
+        return json({ error: 'Failed to start round' }, 500);
+      }
+    }
+
+    // 2-b. Score Save: 입력 기록을 서버가 재생해 시간/실수를 계산하고, 서버가 잰 경과 시간과 맞는지 확인한다.
     if (url.pathname.includes('save-score')) {
       if (request.method !== 'POST') {
         return json({ error: 'Method not allowed' }, 405);
       }
 
       try {
+        const identity = await authenticate(request, env);
+        if (!identity.key) return json({ error: 'Unauthorized' }, 401);
+        if (!env.SESSION_SECRET) return json({ error: 'Server is not configured' }, 503);
+
         const parsed = await readJsonBody(request);
         if (parsed.tooLarge) return json({ error: 'Payload too large' }, 413);
         if (parsed.invalid || !isPlainObject(parsed.value)) return json({ error: 'Invalid JSON' }, 400);
-        const { seed, deviceId, nickname, time, mistakes, hasBackupCode } = parsed.value;
+        const { seed, nickname, round, log } = parsed.value;
 
         const cleanNickname = cleanText(nickname, MAX_NICKNAME_LENGTH);
-        const cleanDeviceId = typeof deviceId === 'string' && ID_PATTERN.test(deviceId) ? deviceId : 'unknown';
-        const timeSec = Number(time);
-        const mistakeCount = mistakes == null ? 0 : Number(mistakes);
-
-        if (typeof seed !== 'string' || !SEED_PATTERN.test(seed) || !cleanNickname || !Number.isFinite(timeSec)) {
+        if (!isValidSeed(seed) || !cleanNickname) {
           return json({ error: 'Missing or invalid score parameters' }, 400);
         }
-        // 클라이언트 시간대 차이(±14시간)를 고려해 오늘 기준 ±2일 이내의 시드만 허용한다
-        const seedDate = Date.UTC(Number(seed.slice(0, 4)), Number(seed.slice(4, 6)) - 1, Number(seed.slice(6, 8)));
-        if (Number.isNaN(seedDate) || Math.abs(seedDate - Date.now()) > 2 * 24 * 60 * 60 * 1000) {
-          return json({ error: 'Invalid seed date' }, 400);
-        }
-        if (timeSec < 2 || timeSec > 3600 || !Number.isInteger(mistakeCount) || mistakeCount < 0 || mistakeCount > 9999) {
-          return json({ error: 'Invalid score values' }, 400);
-        }
-        if (await isLimited(env, 'RL_SCORE', `${clientIp}:${cleanDeviceId}`, 10, 60 * 1000)) {
+        if (await isLimited(env, 'RL_SCORE', identity.key, 10, 60 * 1000)) {
           return json({ error: 'Too many requests' }, 429);
         }
 
-        const firestorePost = await fetch(
-          `${FIRESTORE_BASE}/leaderboard/${seed}/scores`,
+        const token = await verifyToken(env.SESSION_SECRET, round);
+        if (!token || token.typ !== 'round' || token.k !== identity.key || token.s !== seed) {
+          return json({ error: 'Invalid round' }, 400);
+        }
+        const run = verifyRun(generateArrows(seed), log);
+        if (!run.ok) return json({ error: run.error }, 400);
+        // 기록상 걸린 시간만큼은 실제로 시간이 흘렀어야 한다
+        if (Date.now() - token.t < run.time * 1000 - ROUND_ELAPSED_SLACK_MS) {
+          return json({ error: 'Invalid score timing' }, 400);
+        }
+
+        // 문서 ID를 라운드 토큰의 nonce로 고정해 같은 라운드의 중복 등록을 막는다
+        const firestorePost = await firestoreAdminFetch(
+          env,
+          `${FIRESTORE_BASE}/leaderboard/${seed}/scores?documentId=${token.n}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               fields: {
-                deviceId: { stringValue: cleanDeviceId },
+                deviceId: { stringValue: identity.key },
                 nickname: { stringValue: cleanNickname },
-                time: { doubleValue: timeSec },
-                mistakes: { integerValue: String(mistakeCount) },
-                hasBackupCode: { booleanValue: hasBackupCode === true },
+                time: { doubleValue: run.time },
+                mistakes: { integerValue: String(run.mistakes) },
+                hasBackupCode: { booleanValue: !!identity.discordId },
                 timestamp: { timestampValue: new Date().toISOString() },
               },
             }),
           }
         );
+        if (firestorePost.status === 409) return json({ error: 'Score already submitted' }, 409);
+        if (!firestorePost.ok) return json({ error: 'Failed to write to Firestore' }, firestorePost.status);
 
-        const postData = await firestorePost.json();
-        if (!firestorePost.ok) {
-          return json({ error: 'Failed to write to Firestore' }, firestorePost.status);
-        }
-
-        return json({
-          success: true,
-          id: postData.name ? postData.name.split('/').pop() : null,
-        });
+        return json({ success: true, id: token.n, time: run.time, mistakes: run.mistakes });
       } catch {
         return json({ error: 'Failed to save score' }, 500);
       }
@@ -695,10 +762,11 @@ export default {
         }
       }
 
-      // POST: Save/Merge user profile (Discord 토큰으로 본인 확인 필요)
+      // POST: Save/Merge user profile (Discord 본인 확인 필요, 서비스 계정 권한으로 기록)
       if (request.method === 'POST') {
         try {
-          const discordId = await verifyDiscordToken(getBearerToken(request));
+          const identity = await authenticate(request, env);
+          const discordId = identity.discordId;
           if (!discordId) {
             return json({ error: 'Unauthorized' }, 401);
           }
@@ -716,10 +784,6 @@ export default {
           if (typeof docId !== 'string' || !ID_PATTERN.test(docId)) {
             return json({ error: 'User id is required' }, 400);
           }
-          // 다른 Discord 계정 전용 문서 ID(discord_<id>)는 쓸 수 없다
-          if (docId.startsWith('discord_') && docId !== `discord_${discordId}`) {
-            return json({ error: 'Forbidden' }, 403);
-          }
 
           const profileFields = { ...profile };
           delete profileFields.id;
@@ -729,13 +793,15 @@ export default {
             return json({ error: 'Forbidden' }, 403);
           }
 
-          // 이미 다른 Discord 계정에 연동된 문서는 덮어쓸 수 없다
-          const existingRes = await fetch(`${FIRESTORE_BASE}/users/${encodeURIComponent(docId)}`);
-          if (existingRes.ok) {
-            const existing = parseFirestoreFields((await existingRes.json()).fields);
-            if (existing.discordId && String(existing.discordId) !== discordId) {
-              return json({ error: 'Forbidden' }, 403);
-            }
+          // 문서 소유 확인: 이미 이 Discord 계정에 연동된 문서이거나, 내 전용 ID(discord_<id>)이거나,
+          // 아직 연동되지 않은 내 게스트 문서(문서 ID == 내 Firebase uid)일 때만 쓸 수 있다
+          const existingRes = await firestoreAdminFetch(env, `${FIRESTORE_BASE}/users/${encodeURIComponent(docId)}`);
+          const existing = existingRes.ok ? parseFirestoreFields((await existingRes.json()).fields) : null;
+          const ownsExisting = !!existing && String(existing.discordId || '') === discordId;
+          const ownsNew =
+            !ownsExisting && (docId === `discord_${discordId}` || (!!identity.uid && docId === identity.uid && !existing?.discordId));
+          if (!ownsExisting && !ownsNew) {
+            return json({ error: 'Forbidden' }, 403);
           }
 
           // 검증된 Discord ID를 문서에 항상 기록해 소유자를 고정한다
@@ -746,7 +812,8 @@ export default {
           const maskQuery = fieldPaths
             .map((k) => `updateMask.fieldPaths=${encodeURIComponent('`' + k.replace(/[\\`]/g, '\\$&') + '`')}`)
             .join('&');
-          const updateRes = await fetch(
+          const updateRes = await firestoreAdminFetch(
+            env,
             `${FIRESTORE_BASE}/users/${encodeURIComponent(docId)}?${maskQuery}`,
             {
               method: 'PATCH',
@@ -763,6 +830,43 @@ export default {
         } catch {
           return json({ error: 'Failed to save profile' }, 500);
         }
+      }
+    }
+
+    // 3-b. 멀티플레이 결과 로그 (방장이 기록). 서비스 계정 권한으로 기록한다.
+    if (url.pathname.includes('multiplayer-log')) {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      try {
+        const identity = await authenticate(request, env);
+        if (!identity.key) return json({ error: 'Unauthorized' }, 401);
+        if (await isLimited(env, 'RL_SCORE', `log:${identity.key}`, 10, 60 * 1000)) {
+          return json({ error: 'Too many requests' }, 429);
+        }
+        const parsed = await readJsonBody(request);
+        if (parsed.tooLarge) return json({ error: 'Payload too large' }, 413);
+        if (parsed.invalid || !isPlainObject(parsed.value)) return json({ error: 'Invalid JSON' }, 400);
+        const { roomId, seed, players } = parsed.value;
+        if (
+          typeof roomId !== 'string' ||
+          !ROOM_ID_PATTERN.test(roomId) ||
+          typeof seed !== 'string' ||
+          seed.length > 32 ||
+          !isPlainObject(players) ||
+          Object.keys(players).length > 4
+        ) {
+          return json({ error: 'Invalid log' }, 400);
+        }
+        const fields = toFirestoreFields({ roomId, seed, players, reporter: identity.key });
+        fields.timestamp = { timestampValue: new Date().toISOString() };
+        const res = await firestoreAdminFetch(env, `${FIRESTORE_BASE}/multiplayer_logs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields }),
+        });
+        if (!res.ok) return json({ error: 'Failed to write log' }, res.status);
+        return json({ success: true });
+      } catch {
+        return json({ error: 'Failed to save log' }, 500);
       }
     }
 
@@ -914,10 +1018,19 @@ export default {
 
         const userData = await userRes.json();
 
+        // 웹 로그인용 세션 토큰: Worker가 확인한 Discord ID와(Firebase 토큰이 함께 오면) 그 uid를 묶어 서명한다
+        let session = null;
+        if (env.SESSION_SECRET) {
+          const idToken = request.headers.get('X-Firebase-Token');
+          const verified = idToken ? await verifyFirebaseIdToken(idToken) : null;
+          session = await signToken(env.SESSION_SECRET, { typ: 'session', d: String(userData.id), u: verified?.uid || null }, SESSION_TTL_MS);
+        }
+
         // 필요한 공개 프로필 필드만 돌려준다 (access_token은 Activity SDK 인증과 Worker 본인 확인에 쓰인다)
         return json({
           success: true,
           access_token: accessToken,
+          session,
           user: {
             id: userData.id,
             username: userData.username,

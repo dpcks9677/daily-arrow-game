@@ -1,4 +1,5 @@
 // Discord OAuth2 클라이언트 헬퍼
+import { getIdentityHeaders, saveStoredSession, clearStoredSession } from './workerApi';
 
 const DISCORD_SESSION_KEY = 'arrow_game_discord_user';
 
@@ -31,8 +32,10 @@ export async function exchangeDiscordCode(code) {
   try {
     response = await fetch(endpoint, {
       method: 'POST',
+      // Firebase 익명 로그인 토큰을 함께 보내면 Worker가 세션 토큰에 내 uid를 묶어 준다
       headers: {
         'Content-Type': 'application/json',
+        ...(await getIdentityHeaders()),
       },
       body: JSON.stringify({ code, redirectUri }),
     });
@@ -46,6 +49,7 @@ export async function exchangeDiscordCode(code) {
     throw new Error(data.error || '디스코드 인증에 실패했습니다.');
   }
 
+  saveStoredSession(data.session);
   return data.user;
 }
 
@@ -90,6 +94,7 @@ export function getStoredDiscordUser() {
 export function clearStoredDiscordUser() {
   try {
     localStorage.removeItem(DISCORD_SESSION_KEY);
+    clearStoredSession();
   } catch (e) {
     console.error("Failed to clear Discord user session:", e);
   }

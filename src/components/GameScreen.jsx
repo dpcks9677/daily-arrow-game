@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight } from 'lucide-react';
-import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateDailyArrows, processGameCompletion, getDailySeed, getByteLength, getKSTDateString } from '../utils';
 import { triggerConfetti } from '../utils';
 import MobileDPad from './MobileDPad';
+import { callWorker } from '../workerApi';
+import { isDiscordActivity } from '../discordActivity';
+
+const ARROW_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 
 export default function GameScreen({ onHome, onLeaderboard, userProfile, saveProfile, setUnlockedPopups, showToast }) {
   const [arrows] = useState(() => generateDailyArrows(50));
@@ -25,6 +29,10 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
   const setIsStunned = useCallback((val) => { isStunnedRef.current = val; _setIsStunned(val); }, []);
   
   const [mistakes, setMistakes] = useState(0)
+  // 점수 검증용: 서버가 발급한 라운드 토큰과 입력 기록([키 번호, 첫 입력 이후 ms, 정답 여부])
+  const roundRef = useRef(null);
+  const runStartRef = useRef(0);
+  const runLogRef = useRef([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showModal, setShowModal] = useState(false)
 
@@ -88,6 +96,11 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
     if (gameStatusRef.current === 'waiting') {
       setGameStatus('playing')
       setStartTime(performance.now())
+      runStartRef.current = performance.now()
+      // 첫 입력 시 서버에 라운드 시작을 알린다 (서버가 시작 시각을 서명해 돌려줌)
+      roundRef.current = callWorker('/start-round', { body: { seed: getDailySeed().toString() } })
+        .then((r) => (r.ok ? r.data.round : null))
+        .catch(() => null);
 
       if (userProfile && userProfile.discordId) {
         const todayStr = getKSTDateString();
@@ -110,6 +123,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
     }
 
     const expectedArrow = arrows[currentIndexRef.current];
+    runLogRef.current.push([ARROW_KEYS.indexOf(key), Math.round(performance.now() - runStartRef.current), key === expectedArrow ? 1 : 0]);
 
     if (key === expectedArrow) {
       const nextIndex = currentIndexRef.current + 1;
@@ -191,92 +205,51 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
     }
     setIsSubmitting(true);
     try {
-      const deviceId = userProfile.id;
       const dailySeed = getDailySeed().toString();
       localStorage.setItem('arrow_game_nickname', nickname.trim());
       
-      const timeSec = Number((timeElapsed / 1000).toFixed(2));
-      const hasBackupCode = !!userProfile.discordId;
-
-      // 1. 디스코드 액티비티 환경(CSP 제약)을 위해 Worker Proxy 우선 시도
-      let savedViaProxy = false;
-      let savedDocId = null;
+      // 점수는 Worker가 입력 기록을 재생해 시간/실수를 직접 계산해 등록한다 (클라이언트가 보낸 숫자는 쓰지 않음)
+      const round = await roundRef.current;
+      if (!round) {
+        throw new Error('라운드 정보를 확인하지 못했습니다. 로그인/연결 상태를 확인하고 다시 시도해 주세요.');
+      }
+      const saved = await callWorker('/save-score', {
+        body: { seed: dailySeed, nickname: nickname.trim(), round, log: runLogRef.current },
+      });
+      if (!saved.ok) {
+        throw new Error(saved.data?.error || '점수 등록에 실패했습니다.');
+      }
+      const savedDocId = saved.data.id;
       const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
-      const candidateEndpoints = [
-        '/api/save-score',
-        '/.proxy/api/save-score',
-        baseAuthUrl ? `${baseAuthUrl}/api/save-score` : null,
-      ].filter(Boolean);
-
-      for (const ep of candidateEndpoints) {
-        try {
-          const res = await fetch(ep, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              seed: dailySeed,
-              deviceId,
-              nickname: nickname.trim(),
-              time: timeSec,
-              mistakes,
-              hasBackupCode,
-            }),
-          });
-          const cType = res.headers.get('content-type') || '';
-          if (cType.includes('application/json')) {
-            const data = await res.json();
-            if (data.success) {
-              savedViaProxy = true;
-              savedDocId = data.id;
-              break;
-            }
-          }
-        } catch {
-          // fallback
-        }
-      }
-
-      // 2. 프록시 실패 시 (또는 일반 웹 브라우저 환경) Firestore SDK 직접 저장
-      const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
-      const newDocRef = doc(scoresRef);
-      if (!savedViaProxy) {
-        await setDoc(newDocRef, {
-          deviceId: deviceId,
-          nickname: nickname.trim(),
-          time: timeSec,
-          mistakes: mistakes,
-          hasBackupCode: hasBackupCode,
-          timestamp: serverTimestamp()
-        });
-      }
 
       const newUnlocked = ['leaderboard_entry'];
       try {
         let isTop1 = false;
-        if (savedViaProxy) {
-          // 디스코드 액티비티는 CSP로 SDK 조회가 막혀 있어 Worker 리더보드로 판정
-          const leaderboardEndpoints = [
-            `/api/leaderboard?seed=${dailySeed}`,
-            `/.proxy/api/leaderboard?seed=${dailySeed}`,
-            baseAuthUrl ? `${baseAuthUrl}/api/leaderboard?seed=${dailySeed}` : null,
-          ].filter(Boolean);
-          for (const ep of leaderboardEndpoints) {
-            try {
-              const res = await fetch(ep);
-              if (!(res.headers.get('content-type') || '').includes('application/json')) continue;
-              const data = await res.json();
-              if (data.success) {
-                isTop1 = !!savedDocId && data.scores.length >= 5 && data.scores[0].id === savedDocId;
-                break;
-              }
-            } catch {
-              // 다음 엔드포인트 시도
+        let checkedViaWorker = false;
+        // 디스코드 액티비티는 CSP로 SDK 조회가 막혀 있어 Worker 리더보드로 판정
+        const leaderboardEndpoints = [
+          `/api/leaderboard?seed=${dailySeed}`,
+          `/.proxy/api/leaderboard?seed=${dailySeed}`,
+          baseAuthUrl ? `${baseAuthUrl}/api/leaderboard?seed=${dailySeed}` : null,
+        ].filter(Boolean);
+        for (const ep of leaderboardEndpoints) {
+          try {
+            const res = await fetch(ep);
+            if (!(res.headers.get('content-type') || '').includes('application/json')) continue;
+            const data = await res.json();
+            if (data.success) {
+              isTop1 = !!savedDocId && data.scores.length >= 5 && data.scores[0].id === savedDocId;
+              checkedViaWorker = true;
+              break;
             }
+          } catch {
+            // 다음 엔드포인트 시도
           }
-        } else {
-          const qList = query(scoresRef, orderBy('time', 'asc'), limit(5));
+        }
+        if (!checkedViaWorker && !isDiscordActivity()) {
+          const qList = query(collection(db, 'leaderboard', dailySeed, 'scores'), orderBy('time', 'asc'), limit(5));
           const snap = await getDocs(qList);
-          isTop1 = snap.size >= 5 && snap.docs[0].id === newDocRef.id;
+          isTop1 = snap.size >= 5 && snap.docs[0].id === savedDocId;
         }
         if (isTop1) newUnlocked.push('top_1');
       } catch(err) { console.error('Error checking top_1:', err); }

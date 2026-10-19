@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight } from 'lucide-react';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { callWorker } from '../workerApi';
 import { generateDailyArrows } from '../utils';
 import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom, subscribeRoom, getServerNow, getMultiplayerUserId, isWsRoomsMode, COUNTDOWN_DURATION_MS } from '../multiplayerUtils';
 import MultiplayerBoard from './MultiplayerBoard';
@@ -268,13 +267,7 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
         // 방장이면 글로벌 로그 기록
         if (roomData.host === userId) {
-          const logRef = doc(collection(db, 'multiplayer_logs'));
-          setDoc(logRef, {
-            roomId,
-            seed,
-            timestamp: serverTimestamp(),
-            players: players
-          }).catch(console.error);
+          callWorker('/multiplayer-log', { body: { roomId, seed, players } }).catch(console.error);
         }
       }
     }

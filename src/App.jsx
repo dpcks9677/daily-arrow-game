@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { db, auth, doc, setDoc, getDoc, collection, query, where, getDocs } from './firebase';
+import { db, auth, doc, getDoc, collection, query, where, getDocs } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { loadSecureProfile, saveSecureProfile, getKSTDateString } from './utils';
 import { 
@@ -10,8 +10,9 @@ import {
   clearStoredDiscordUser, 
   getDiscordAvatarUrl 
 } from './discordAuth';
-import { isDiscordActivity, initDiscordActivity, getWorkerAuthHeaders } from './discordActivity';
+import { isDiscordActivity, initDiscordActivity } from './discordActivity';
 import { closeRoomConnection } from './activityRoom';
+import { callWorker } from './workerApi';
 
 import StartScreen from './components/StartScreen';
 import GameScreen from './components/GameScreen';
@@ -210,22 +211,10 @@ function App() {
           setUserProfile(mergedProfile);
           saveSecureProfile(mergedProfile);
 
-          // 동기화 저장
-          if (isDiscordActivity()) {
-            const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
-            const epList = ['/api/user-profile', '/.proxy/api/user-profile', baseAuthUrl ? `${baseAuthUrl}/api/user-profile` : null].filter(Boolean);
-            for (const ep of epList) {
-              try {
-                const r = await fetch(ep, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', ...getWorkerAuthHeaders() },
-                  body: JSON.stringify({ id: canonicalId, profile: mergedProfile })
-                });
-                if (r.ok) break;
-              } catch { /* 다음 엔드포인트 시도 */ }
-            }
-          }
-          setDoc(doc(db, 'users', canonicalId), mergedProfile, { merge: true }).catch(e => console.error("Firestore sync error:", e));
+          // 동기화 저장 (Firestore 쓰기는 Worker가 본인 확인 후 처리)
+          callWorker('/user-profile', { body: { id: canonicalId, profile: mergedProfile } })
+            .then((r) => { if (!r.ok) console.error('Profile sync rejected:', r.data?.error); })
+            .catch((e) => console.error('Profile sync error:', e));
         } else {
           // 게스트 / 익명 로그인 로직
           const fetchAndMerge = async (fallbackProfile) => {
@@ -309,21 +298,12 @@ function App() {
     setUserProfile(newProfile);
     saveSecureProfile(newProfile);
     if (newProfile.discordId) {
-      if (isDiscordActivity()) {
-        const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
-        const epList = ['/api/user-profile', '/.proxy/api/user-profile', baseAuthUrl ? `${baseAuthUrl}/api/user-profile` : null].filter(Boolean);
-        for (const ep of epList) {
-          try {
-            const r = await fetch(ep, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...getWorkerAuthHeaders() },
-              body: JSON.stringify({ id: newProfile.id, profile: updates })
-            });
-            if (r.ok) break;
-          } catch { /* 다음 엔드포인트 시도 */ }
-        }
+      try {
+        const r = await callWorker('/user-profile', { body: { id: newProfile.id, profile: updates } });
+        if (!r.ok) console.error('DB Sync rejected:', r.data?.error);
+      } catch (e) {
+        console.error('DB Sync error:', e);
       }
-      setDoc(doc(db, 'users', newProfile.id), updates, { merge: true }).catch(e => console.error("DB Sync error:", e));
     }
   };
 

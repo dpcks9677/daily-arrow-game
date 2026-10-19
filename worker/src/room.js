@@ -6,6 +6,9 @@ export const COUNTDOWN_DURATION_MS = 4000;
 export const MAX_NICKNAME_LENGTH = 50;
 // 한 판이 끝난 뒤 다시하기를 누르지 않은 플레이어를 정리하기까지의 유예 시간
 export const REPLAY_KICK_AFTER_MS = 14000;
+// 완료 시간 검증: 서버 측정과의 허용 오차(네트워크 지연, 시계 오차)와 최소 소요 시간
+const MAX_TIME_SKEW_SECONDS = 3;
+const MIN_FINISH_SECONDS = 2;
 
 const clamp = (v, min, max) => Math.min(Math.max(Number.isFinite(v) ? v : 0, min), max);
 
@@ -136,10 +139,17 @@ export function finishGame(room, me, { time, mistakes }, now) {
   const player = room.players[me];
   if (!player) return { room, error: '방에 참가 중이 아닙니다.' };
   if (room.status !== 'playing' || player.finishedAt) return { room };
+  // 완료 시간은 서버가 잰 경과 시간(카운트다운 종료 ~ 완료 메시지 도착)과 크게 다르면 서버 값을 쓴다.
+  // 카운트다운이 끝나기도 전이거나 사람이 낼 수 없는 시간이면 완료로 인정하지 않는다.
+  const elapsedSec = (now - ((room.startedAt || 0) + (room.countdownDuration || COUNTDOWN_DURATION_MS))) / 1000;
+  if (elapsedSec < MIN_FINISH_SECONDS) return { room, error: '완료 시간이 올바르지 않습니다.' };
+  let finalTime = clamp(Number(time), 0, 3600);
+  if (Math.abs(elapsedSec - finalTime) > MAX_TIME_SKEW_SECONDS) finalTime = Math.round(clamp(elapsedSec, 0, 3600) * 100) / 100;
+
   const finished = Object.values(room.players).filter((p) => p.finishedAt).length;
   player.progress = 50;
   player.finishedAt = now;
-  player.finalTime = clamp(Number(time), 0, 3600);
+  player.finalTime = finalTime;
   player.mistakes = clamp(Number(mistakes), 0, 9999);
   player.rank = finished + 1;
   return { room };

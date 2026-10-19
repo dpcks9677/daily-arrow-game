@@ -2,68 +2,24 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 0 이상 max 이하의 숫자인지 (필드가 있을 때만 검사)
-    function validCounter(data, field, max) {
-      return !(field in data) || (data[field] is number && data[field] >= 0 && data[field] <= max);
-    }
+    // 모든 쓰기는 Worker가 서비스 계정 권한으로 처리한다 (Discord/Firebase 토큰으로 본인 확인,
+    // 입력 기록 재생으로 점수 검증). 클라이언트 SDK의 직접 쓰기는 허용하지 않는다.
 
-    function validUser(data) {
-      return data.size() <= 40
-        // 폐기된 백업 코드 필드는 다시 저장할 수 없다 (공개 읽기 문서에 계정 복구 비밀값이 노출되던 문제)
-        && !("backupCode" in data)
-        && validCounter(data, "currentStreak", 10000)
-        && validCounter(data, "totalLongestStreak", 10000)
-        && validCounter(data, "totalPlayCount", 1000000)
-        && validCounter(data, "multiplayerPlays", 1000000)
-        && validCounter(data, "multiplayerWins", 1000000)
-        && validCounter(data, "multiplayerCompletions", 1000000)
-        && (!("nickname" in data) || (data.nickname is string && data.nickname.size() <= 50))
-        && (!("discordId" in data) || (data.discordId is string && data.discordId.size() <= 32))
-        && (!("achievements" in data) || (data.achievements is list && data.achievements.size() <= 100))
-        && (!("totalBestRecords" in data) || (data.totalBestRecords is list && data.totalBestRecords.size() <= 200))
-        && (!("dailyRecords" in data) || (data.dailyRecords is map && data.dailyRecords.size() <= 2000));
-    }
-
-    // users 컬렉션
-    // 익명 인증 도입 전까지는 문서 소유자를 규칙만으로 확인할 수 없으므로 값의 형식과 크기만 제한한다.
-    // (Discord Activity의 쓰기는 Worker가 Discord 토큰으로 본인 확인 후 처리)
+    // users 컬렉션: 프로필은 공개 읽기 (Discord ID로 기록 복원 시 조회)
     match /users/{userId} {
       allow read: if true;
-      allow create, update: if userId.size() <= 128 && validUser(request.resource.data);
-      allow delete: if false;
+      allow write: if false;
     }
 
     // 리더보드 점수 컬렉션 (leaderboard/YYYYMMDD/scores)
     match /leaderboard/{dailySeed}/scores/{scoreId} {
       allow read: if true;
-      allow create: if dailySeed.matches('^[0-9]{8}$')
-                    && request.resource.data.keys().hasOnly(['deviceId', 'nickname', 'time', 'mistakes', 'hasBackupCode', 'timestamp'])
-                    && request.resource.data.keys().hasAll(['nickname', 'time', 'mistakes'])
-                    && request.resource.data.nickname is string
-                    && request.resource.data.nickname.size() >= 1
-                    && request.resource.data.nickname.size() <= 50
-                    && request.resource.data.time is number
-                    && request.resource.data.time >= 2.0
-                    && request.resource.data.time <= 3600
-                    && request.resource.data.mistakes is int
-                    && request.resource.data.mistakes >= 0
-                    && request.resource.data.mistakes <= 9999
-                    && (!('deviceId' in request.resource.data) || (request.resource.data.deviceId is string && request.resource.data.deviceId.size() <= 128))
-                    && (!('hasBackupCode' in request.resource.data) || request.resource.data.hasBackupCode is bool)
-                    && (!('timestamp' in request.resource.data) || request.resource.data.timestamp is timestamp);
-      allow update, delete: if false;
+      allow write: if false;
     }
 
-    // 멀티플레이 결과 로그 컬렉션
+    // 멀티플레이 결과 로그 컬렉션 (읽기/쓰기 모두 서버 전용)
     match /multiplayer_logs/{logId} {
-      allow create: if request.resource.data.keys().hasOnly(['roomId', 'seed', 'timestamp', 'players'])
-                    && request.resource.data.roomId is string
-                    && request.resource.data.roomId.size() <= 12
-                    && request.resource.data.seed is string
-                    && request.resource.data.seed.size() <= 32
-                    && request.resource.data.players is map
-                    && request.resource.data.players.size() <= 4;
-      allow read, update, delete: if false;
+      allow read, write: if false;
     }
   }
 }
