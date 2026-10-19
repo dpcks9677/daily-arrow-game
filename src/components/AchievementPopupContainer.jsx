@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { ACHIEVEMENTS } from '../constants';
 
@@ -6,14 +6,12 @@ export default function AchievementPopupContainer({ popups, setPopups }) {
   const [dismissed, setDismissed] = useState([]);
   const [summaryDismissed, setSummaryDismissed] = useState(false);
 
-  useEffect(() => {
-    if (!popups || popups.length === 0) {
-      setDismissed([]);
-      setSummaryDismissed(false);
-    }
-  }, [popups]);
-
-  if (!popups || popups.length === 0) return null;
+  if (!popups || popups.length === 0) {
+    // 팝업이 모두 비워지면 다음 표시를 위해 닫힘 상태를 초기화 (렌더 중 상태 조정)
+    if (dismissed.length > 0) setDismissed([]);
+    if (summaryDismissed) setSummaryDismissed(false);
+    return null;
+  }
 
   const initialDisplay = popups.length > 3 ? popups.slice(0, 2) : popups;
   const remainingCount = popups.length > 3 ? popups.length - 2 : 0;

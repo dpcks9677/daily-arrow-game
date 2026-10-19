@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Flame, Trophy, BarChart, AlertCircle, LogOut } from 'lucide-react';
-import { collection, doc, setDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import { useState } from 'react';
+import { ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Flame, Trophy, BarChart, AlertCircle, LogOut } from 'lucide-react';
+import { collection, doc, setDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getByteLength, saveSecureProfile, getKSTDate, getKSTDateString, processGameCompletion, getStreakStatus } from '../utils';
+import { getByteLength, saveSecureProfile, getKSTDate, getKSTDateString, getStreakStatus } from '../utils';
 import { ACHIEVEMENTS } from '../constants';
-import { DiscordIcon } from '../discordAuth';
+import { DiscordIcon } from './DiscordIcon';
 
 export default function StartScreen({
   onPlay,
@@ -29,7 +29,6 @@ export default function StartScreen({
   const [showAchievements, setShowAchievements] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
   const [statsPage, setStatsPage] = useState(0);
-  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
   const [recoverCode, setRecoverCode] = useState('');
   const [isRecovering, setIsRecovering] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
@@ -48,17 +47,16 @@ export default function StartScreen({
     setRecoverCode(val.slice(0, 9));
   };
 
-  useEffect(() => {
+  // 프로필 창이 열리거나 프로필이 바뀌면 닉네임 편집 상태를 동기화 (렌더 중 상태 조정)
+  const [syncedProfile, setSyncedProfile] = useState({ showProfile: false, userProfile: null });
+  if (syncedProfile.showProfile !== showProfile || syncedProfile.userProfile !== userProfile) {
+    setSyncedProfile({ showProfile, userProfile });
     if (showProfile && userProfile) {
-      if (!userProfile.nickname) {
-        setIsEditingNickname(true);
-      } else {
-        setIsEditingNickname(false);
-      }
+      setIsEditingNickname(!userProfile.nickname);
       setEditNicknameValue(userProfile.nickname || '');
       setNicknameError('');
     }
-  }, [showProfile, userProfile]);
+  }
 
   const handleEditNicknameChange = (e) => {
     const val = e.target.value;
@@ -90,7 +88,6 @@ export default function StartScreen({
       return;
     }
     try {
-      const deviceId = userProfile.id;
       await saveProfile(userProfile, { nickname: trimmed });
       localStorage.setItem('arrow_game_nickname', trimmed);
       setIsEditingNickname(false);
@@ -390,7 +387,6 @@ export default function StartScreen({
 
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <button onClick={async () => {
-                  const kstNow = getKSTDate();
                   const todayStr = getKSTDateString();
                   const timeSec = Number(debugTime);
                   const mistakes = Number(debugMistakes);
@@ -480,7 +476,6 @@ export default function StartScreen({
               </div>
 
               <button onClick={async () => {
-                const kstNow = getKSTDate();
                 const todayStr = getKSTDateString();
                 let newStreak = (userProfile?.currentStreak || 1) + 1;
 
@@ -635,7 +630,6 @@ export default function StartScreen({
                     <div className="modal-info-box" style={{ background: 'rgba(30, 58, 138, 0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                       <h3 style={{ fontSize: '1.1rem', color: '#f8fafc', margin: 0, textAlign: 'left' }}>오늘의 기록</h3>
                       {(() => {
-                        const kstNow = getKSTDate();
                         const todayStr = getKSTDateString();
                         const dailyRecs = userProfile.dailyRecords || {};
                         const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayMistakes: 0, todayPlayTime: 0, todayTrials: 0 };

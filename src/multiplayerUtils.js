@@ -144,14 +144,14 @@ export async function getRoomPlayers(roomId) {
     try {
       const players = await rtdbFetch(`rooms/${roomId}/players`, 'GET');
       return players || {};
-    } catch (e) {
+    } catch {
       return {};
     }
   } else {
     try {
       const snap = await get(ref(rtdb, `rooms/${roomId}/players`));
       return snap.exists() ? (snap.val() || {}) : {};
-    } catch (e) {
+    } catch {
       return {};
     }
   }
@@ -173,7 +173,6 @@ export function subscribeRoom(roomId, callback, options = {}) {
 
   if (isDiscordActivity()) {
     // === 방법 C: Discord URL Mapping WebSocket 프록시 시도 ===
-    let wsSuccess = false;
     let wsUnsub = null;
     let pollUnsub = null;
     let wsTimeoutId = null;
@@ -185,7 +184,7 @@ export function subscribeRoom(roomId, callback, options = {}) {
     try {
       // TODO: Discord URL Mapping WebSocket 프록시 활성화 시 여기에 구현
       throw new Error('Skip WS proxy — use adaptive polling');
-    } catch (wsErr) {
+    } catch {
       // === 방법 B: 적응형 HTTP 폴링 (Adaptive Polling) ===
       let active = true;
       let timer = null;
@@ -332,7 +331,9 @@ export async function getOrCreateVoiceChannelRoom(channelId, userId, nickname) {
       try {
         const playerRef = ref(rtdb, `rooms/${roomId}/players/${userId}`);
         onDisconnect(playerRef).update({ isDisconnected: true });
-      } catch (e) {}
+      } catch {
+        // onDisconnect 등록 실패는 무시한다
+      }
     }
     return roomId;
   } else {
@@ -368,7 +369,9 @@ export async function getOrCreateVoiceChannelRoom(channelId, userId, nickname) {
       await set(playerRef, newPlayerData);
       try {
         onDisconnect(playerRef).update({ isDisconnected: true });
-      } catch (e) {}
+      } catch {
+        // onDisconnect 등록 실패는 무시한다
+      }
     }
     return roomId;
   }
@@ -423,7 +426,9 @@ export async function joinRoom(roomId, userId, nickname) {
     await set(playerRef, newPlayerData);
     try {
       onDisconnect(playerRef).update({ isDisconnected: true });
-    } catch (e) {}
+    } catch {
+      // onDisconnect 등록 실패는 무시한다
+    }
   }
 
   return roomId;

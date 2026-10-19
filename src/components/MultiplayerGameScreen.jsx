@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight } from 'lucide-react';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { generateDailyArrows, getKSTDateString } from '../utils';
+import { generateDailyArrows } from '../utils';
 import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom, subscribeRoom, getServerNow, COUNTDOWN_DURATION_MS } from '../multiplayerUtils';
 import MultiplayerBoard from './MultiplayerBoard';
 import MobileDPad from './MobileDPad';
@@ -12,7 +12,7 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
   const userId = userProfile?.id;
   
   const [roomData, setRoomData] = useState(null);
-  const [arrows, setArrows] = useState([]);
+  const arrows = useMemo(() => generateDailyArrows(50, seed), [seed]);
   
   const currentIndexRef = useRef(0);
   const [currentIndex, _setCurrentIndex] = useState(0);
@@ -31,10 +31,10 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
   const setIsStunned = useCallback((val) => { isStunnedRef.current = val; _setIsStunned(val); }, []);
   
   const mistakesRef = useRef(0);
-  const [mistakes, _setMistakes] = useState(0);
+  const [, _setMistakes] = useState(0);
   const setMistakes = useCallback((val) => { mistakesRef.current = val; _setMistakes(val); }, []);
   const [isAllFinished, setIsAllFinished] = useState(false);
-  const [statsSaved, setStatsSaved] = useState(false);
+  const statsSavedRef = useRef(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   const timerRef = useRef(null);
@@ -72,11 +72,6 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
     return () => unsubscribe();
   }, [roomId, gameStatus, onHome, userId]);
-
-  // Initial Setup: 화살표 배열 생성
-  useEffect(() => {
-    setArrows(generateDailyArrows(50, seed));
-  }, [seed]);
 
   // 서버 타임스탬프 기반 카운트다운 (방법 A)
   // roomData.startedAt (서버 시각)을 기준으로 남은 시간을 매 프레임 역산하여
@@ -132,8 +127,8 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
   // Update Stats when all finished
   useEffect(() => {
-    if (isAllFinished && roomData && !statsSaved && userProfile && (userProfile.backupCode || userProfile.discordId)) {
-      setStatsSaved(true);
+    if (isAllFinished && roomData && !statsSavedRef.current && userProfile && (userProfile.backupCode || userProfile.discordId)) {
+      statsSavedRef.current = true;
       const players = roomData.players;
       const myData = players[userId];
       
@@ -165,7 +160,7 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
         }
       }
     }
-  }, [isAllFinished, roomData, statsSaved, userProfile, saveProfile, userId, roomId, seed]);
+  }, [isAllFinished, roomData, userProfile, saveProfile, userId, roomId, seed]);
 
   const processInput = useCallback((key) => {
     if (isStunnedRef.current || gameStatusRef.current !== 'playing') return;
@@ -212,10 +207,10 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
   const handleHomeClick = async () => {
     if (gameStatus === 'playing') {
-      let confirmGiveUp = true;
+      let confirmGiveUp;
       try {
         confirmGiveUp = window.confirm('게임을 포기하고 나가시겠습니까? 꼴찌로 기록됩니다.');
-      } catch (e) {
+      } catch {
         confirmGiveUp = true;
       }
       if (!confirmGiveUp) return;

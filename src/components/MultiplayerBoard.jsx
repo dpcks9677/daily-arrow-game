@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Unplug } from 'lucide-react';
 
 export default function MultiplayerBoard({ roomData, myUserId }) {
@@ -28,18 +28,18 @@ export default function MultiplayerBoard({ roomData, myUserId }) {
 }
 
 function MiniBoard({ player }) {
-  const [isShaking, setIsShaking] = useState(false);
+  // shake는 실수 시각(타임스탬프)이라 값이 바뀔 때마다 300ms간 흔들린다. (settledShake: 흔들림이 끝난 shake 값)
+  const [settledShake, setSettledShake] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(player.progress || 0);
   const animRef = useRef(null);
   const targetRef = useRef(player.progress || 0);
 
+  const isShaking = !!player.shake && player.shake > 0 && player.shake !== settledShake;
   useEffect(() => {
-    if (player.shake && player.shake > 0) {
-      setIsShaking(true);
-      const timer = setTimeout(() => setIsShaking(false), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [player.shake]);
+    if (!isShaking) return;
+    const timer = setTimeout(() => setSettledShake(player.shake), 300);
+    return () => clearTimeout(timer);
+  }, [isShaking, player.shake]);
 
   // 진행도 보간 애니메이션 (방법 B)
   // 서버에서 progress가 급격히 증가해도 한 칸씩 빠르게 채워지는 애니메이션 재생
@@ -73,7 +73,6 @@ function MiniBoard({ player }) {
 
   const progress = displayProgress;
   const isDisconnected = player.isDisconnected;
-  const isFinished = player.finishedAt !== null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

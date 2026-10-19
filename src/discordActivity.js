@@ -17,7 +17,7 @@ export function isDiscordActivity() {
         if (window.location.ancestorOrigins[i].includes('discord')) return true;
       }
     }
-  } catch (e) {
+  } catch {
     return false;
   }
   return false;

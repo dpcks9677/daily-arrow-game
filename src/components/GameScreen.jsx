@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, ArrowRight as LucideRight } from 'lucide-react';
 import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -6,8 +6,8 @@ import { generateDailyArrows, processGameCompletion, getDailySeed, getByteLength
 import { triggerConfetti } from '../utils';
 import MobileDPad from './MobileDPad';
 
-export default function GameScreen({ onHome, onLeaderboard, userProfile, setUserProfile, saveProfile, setUnlockedPopups, showToast }) {
-  const [arrows, setArrows] = useState([]);
+export default function GameScreen({ onHome, onLeaderboard, userProfile, saveProfile, setUnlockedPopups, showToast }) {
+  const [arrows] = useState(() => generateDailyArrows(50));
   
   const currentIndexRef = useRef(0);
   const [currentIndex, _setCurrentIndex] = useState(0);
@@ -52,10 +52,6 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
 
 
   useEffect(() => {
-    setArrows(generateDailyArrows(50))
-  }, [])
-
-  useEffect(() => {
     if (gameStatus === 'playing') {
       timerRef.current = setInterval(() => {
         setTimeElapsed(performance.now() - startTime)
@@ -82,6 +78,8 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
       };
       processClearAchievements();
     }
+    // 게임 종료 시점에 한 번만 실행: saveProfile이 userProfile을 바꾸므로 deps에 넣으면 저장이 무한 반복된다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameStatus]);
 
   const processInput = useCallback((key) => {
@@ -202,6 +200,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
 
       // 1. 디스코드 액티비티 환경(CSP 제약)을 위해 Worker Proxy 우선 시도
       let savedViaProxy = false;
+      let savedDocId = null;
       const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
       const candidateEndpoints = [
         '/api/save-score',
@@ -228,18 +227,19 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
             const data = await res.json();
             if (data.success) {
               savedViaProxy = true;
+              savedDocId = data.id;
               break;
             }
           }
-        } catch (e) {
+        } catch {
           // fallback
         }
       }
 
       // 2. 프록시 실패 시 (또는 일반 웹 브라우저 환경) Firestore SDK 직접 저장
+      const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
+      const newDocRef = doc(scoresRef);
       if (!savedViaProxy) {
-        const scoresRef = collection(db, 'leaderboard', dailySeed, 'scores');
-        const newDocRef = doc(scoresRef);
         await setDoc(newDocRef, {
           deviceId: deviceId,
           nickname: nickname.trim(),
@@ -252,11 +252,33 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, setUser
 
       const newUnlocked = ['leaderboard_entry'];
       try {
-        const qList = query(scoresRef, orderBy('time', 'asc'), limit(5));
-        const snap = await getDocs(qList);
-        if (snap.size >= 5 && snap.docs[0].id === newDocRef.id) {
-          newUnlocked.push('top_1');
+        let isTop1 = false;
+        if (savedViaProxy) {
+          // 디스코드 액티비티는 CSP로 SDK 조회가 막혀 있어 Worker 리더보드로 판정
+          const leaderboardEndpoints = [
+            `/api/leaderboard?seed=${dailySeed}`,
+            `/.proxy/api/leaderboard?seed=${dailySeed}`,
+            baseAuthUrl ? `${baseAuthUrl}/api/leaderboard?seed=${dailySeed}` : null,
+          ].filter(Boolean);
+          for (const ep of leaderboardEndpoints) {
+            try {
+              const res = await fetch(ep);
+              if (!(res.headers.get('content-type') || '').includes('application/json')) continue;
+              const data = await res.json();
+              if (data.success) {
+                isTop1 = !!savedDocId && data.scores.length >= 5 && data.scores[0].id === savedDocId;
+                break;
+              }
+            } catch {
+              // 다음 엔드포인트 시도
+            }
+          }
+        } else {
+          const qList = query(scoresRef, orderBy('time', 'asc'), limit(5));
+          const snap = await getDocs(qList);
+          isTop1 = snap.size >= 5 && snap.docs[0].id === newDocRef.id;
         }
+        if (isTop1) newUnlocked.push('top_1');
       } catch(err) { console.error('Error checking top_1:', err); }
 
       const currentAchievements = userProfile?.achievements || [];

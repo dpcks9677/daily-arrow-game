@@ -343,7 +343,7 @@ export default {
         }
 
         if (method === 'DELETE') {
-          const dRes = await fetch(targetUrl, { method: 'DELETE' });
+          await fetch(targetUrl, { method: 'DELETE' });
           return new Response(JSON.stringify({ success: true }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });

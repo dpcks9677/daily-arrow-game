@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Users, LogOut, Play, UserPlus, CheckCircle, Circle, Copy, Volume2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Play, UserPlus, CheckCircle, Circle, Copy, Volume2 } from 'lucide-react';
 import { 
   createRoom, 
   joinRoom, 
@@ -77,9 +77,10 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
   }, [roomId, onGameStart, userId]);
 
   // 15초 타임아웃 킥(Kick) 로직
+  const roomStatus = roomData?.status;
+  const replayStartedAt = roomData?.replayStartedAt;
   useEffect(() => {
-    if (!roomData || !roomId || roomData.status !== 'waiting') return;
-    const replayStartedAt = roomData.replayStartedAt;
+    if (!roomId || roomStatus !== 'waiting') return;
     if (!replayStartedAt) return;
 
     const checkTimeout = async () => {
@@ -114,7 +115,7 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
       const timeout = setTimeout(checkTimeout, timeLeft);
       return () => clearTimeout(timeout);
     }
-  }, [roomData?.replayStartedAt, roomData?.status, roomId, userId]);
+  }, [replayStartedAt, roomStatus, roomId, userId]);
 
   const handleJoinVoiceChannelRoom = async () => {
     if (!channelId) return;

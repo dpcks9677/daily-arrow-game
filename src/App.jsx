@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { db, auth, doc, setDoc, getDoc, collection, query, where, getDocs } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { loadSecureProfile, saveSecureProfile, getKSTDateString } from './utils';
@@ -152,7 +152,7 @@ function App() {
                   break;
                 }
               }
-            } catch (pErr) {
+            } catch {
               // 다음 엔드포인트 시도
             }
           }
@@ -222,7 +222,7 @@ function App() {
                   body: JSON.stringify({ id: canonicalId, profile: mergedProfile })
                 });
                 if (r.ok) break;
-              } catch (e) {}
+              } catch { /* 다음 엔드포인트 시도 */ }
             }
           }
           setDoc(doc(db, 'users', canonicalId), mergedProfile, { merge: true }).catch(e => console.error("Firestore sync error:", e));
@@ -303,7 +303,7 @@ function App() {
       }
     };
     initUser();
-  }, []);
+  }, [showToast]);
 
   const saveProfile = async (currentProfile, updates) => {
     const newProfile = { ...currentProfile, ...updates };
@@ -321,7 +321,7 @@ function App() {
               body: JSON.stringify({ id: newProfile.id, profile: updates })
             });
             if (r.ok) break;
-          } catch (e) {}
+          } catch { /* 다음 엔드포인트 시도 */ }
         }
       }
       setDoc(doc(db, 'users', newProfile.id), updates, { merge: true }).catch(e => console.error("DB Sync error:", e));
