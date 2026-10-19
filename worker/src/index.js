@@ -76,8 +76,20 @@ export default {
     if (url.pathname.includes('leaderboard')) {
       const seed = url.searchParams.get('seed') || '20260915';
       try {
+        // 목록 API는 정렬 없이 문서 ID 순으로 100개만 주므로, 웹 SDK(LeaderboardScreen)와 같게 time 오름차순 상위 50개를 질의한다.
         const firestoreRes = await fetch(
-          `https://firestore.googleapis.com/v1/projects/arrow-game-19120/databases/(default)/documents/leaderboard/${seed}/scores`
+          `https://firestore.googleapis.com/v1/projects/arrow-game-19120/databases/(default)/documents/leaderboard/${encodeURIComponent(seed)}:runQuery`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              structuredQuery: {
+                from: [{ collectionId: 'scores' }],
+                orderBy: [{ field: { fieldPath: 'time' }, direction: 'ASCENDING' }],
+                limit: 50,
+              },
+            }),
+          }
         );
         if (!firestoreRes.ok) {
           return new Response(JSON.stringify({ success: true, scores: [] }), {
@@ -85,7 +97,7 @@ export default {
           });
         }
         const data = await firestoreRes.json();
-        const fetchedScores = (data.documents || []).map((doc) => {
+        const fetchedScores = (data || []).filter((item) => item.document).map(({ document: doc }) => {
           const f = doc.fields || {};
           return {
             id: doc.name.split('/').pop(),
@@ -98,7 +110,6 @@ export default {
           };
         });
 
-        fetchedScores.sort((a, b) => a.time - b.time);
         fetchedScores.forEach((item, idx) => {
           item.rank = idx + 1;
         });
