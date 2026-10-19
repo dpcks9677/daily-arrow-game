@@ -158,7 +158,8 @@ function App() {
           }
 
           // 2-2. 프록시 실패 시 (웹 브라우저 등) Firestore SDK 직접 쿼리
-          if (!remoteDiscordData) {
+          // (디스코드 액티비티는 CSP로 SDK 통신이 막혀 타임아웃까지 로딩이 지연되므로 건너뜀)
+          if (!remoteDiscordData && !isDiscordActivity()) {
             try {
               const usersRef = collection(db, 'users');
               const q = query(usersRef, where('discordId', '==', activeDiscordUser.id));

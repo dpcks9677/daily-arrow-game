@@ -268,8 +268,19 @@ export default {
           }
 
           const fields = toFirestoreFields(profile);
+          const fieldPaths = Object.keys(fields);
+          if (fieldPaths.length === 0) {
+            return new Response(JSON.stringify({ success: true, id: docId }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+
+          // updateMask 없이 PATCH하면 문서 전체가 교체되므로, 전달된 최상위 필드만 갱신한다.
+          const maskQuery = fieldPaths
+            .map((k) => `updateMask.fieldPaths=${encodeURIComponent('`' + k.replace(/[\\`]/g, '\\$&') + '`')}`)
+            .join('&');
           const updateRes = await fetch(
-            `https://firestore.googleapis.com/v1/projects/arrow-game-19120/databases/(default)/documents/users/${docId}`,
+            `https://firestore.googleapis.com/v1/projects/arrow-game-19120/databases/(default)/documents/users/${encodeURIComponent(docId)}?${maskQuery}`,
             {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
