@@ -53,6 +53,16 @@ export function getServerNow() {
   return Date.now() + _clockOffset;
 }
 
+/**
+ * 멀티플레이에서 쓰는 플레이어 ID.
+ * 디스코드 액티비티에서는 Worker가 Discord 토큰으로 검증한 `discord_<id>`만 방 플레이어 키로 인정하므로,
+ * 프로필 문서 ID(웹에서 연동한 계정은 다른 값일 수 있음)와 별개로 이 값을 써야 한다.
+ */
+export function getMultiplayerUserId(userProfile) {
+  if (isDiscordActivity() && userProfile?.discordId) return `discord_${userProfile.discordId}`;
+  return userProfile?.id;
+}
+
 // 6자리 랜덤 방 코드 생성기
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

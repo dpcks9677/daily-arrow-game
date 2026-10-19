@@ -9,7 +9,8 @@ import {
   getOrCreateVoiceChannelRoom,
   subscribeRoom,
   getRoomPlayers,
-  measureClockOffset
+  measureClockOffset,
+  getMultiplayerUserId
 } from '../multiplayerUtils';
 
 export default function MultiplayerLobby({ onHome, onGameStart, userProfile, initialRoomId, isActivity, channelId }) {
@@ -20,7 +21,7 @@ export default function MultiplayerLobby({ onHome, onGameStart, userProfile, ini
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const userId = userProfile?.id;
+  const userId = getMultiplayerUserId(userProfile);
   const nickname = userProfile?.nickname || '';
 
   // 방 입장 시 서버-클라이언트 시계 차이 사전 측정 (방법 A)

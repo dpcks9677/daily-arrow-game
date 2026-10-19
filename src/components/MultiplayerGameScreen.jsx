@@ -3,7 +3,7 @@ import { ArrowUp as LucideUp, ArrowDown as LucideDown, ArrowLeft as LucideLeft, 
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateDailyArrows } from '../utils';
-import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom, subscribeRoom, getServerNow, COUNTDOWN_DURATION_MS } from '../multiplayerUtils';
+import { updateProgress, triggerMistake, finishGame, giveUpGame, playAgain, leaveRoom, subscribeRoom, getServerNow, getMultiplayerUserId, COUNTDOWN_DURATION_MS } from '../multiplayerUtils';
 import MultiplayerBoard from './MultiplayerBoard';
 import MobileDPad from './MobileDPad';
 import { isDiscordActivity } from '../discordActivity';
@@ -25,7 +25,7 @@ function formatSamples(stat) {
 
 export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, multiplayerData, saveProfile }) {
   const { roomId, seed } = multiplayerData;
-  const userId = userProfile?.id;
+  const userId = getMultiplayerUserId(userProfile);
   
   const [roomData, setRoomData] = useState(null);
   const arrows = useMemo(() => generateDailyArrows(50, seed), [seed]);
