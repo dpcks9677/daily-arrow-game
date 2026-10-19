@@ -72,7 +72,7 @@ export default function LeaderboardScreen({ onHome }) {
 
       <div className="leaderboard-container">
         {loading ? (
-          <p style={{ textAlign: 'center', color: '#94a3b8' }}>Loading...</p>
+          <p className="leaderboard-loading">Loading...</p>
         ) : (
           <table className="leaderboard-table">
             <thead>
@@ -84,7 +84,7 @@ export default function LeaderboardScreen({ onHome }) {
               </tr>
             </thead>
             <tbody>
-              {scores.map((player) => {
+              {scores.map((player, index) => {
                 const getMedal = (rank) => {
                   if (rank === 1) return '🥇';
                   if (rank === 2) return '🥈';
@@ -93,7 +93,7 @@ export default function LeaderboardScreen({ onHome }) {
                 };
                 
                 return (
-                  <tr key={player.id}>
+                  <tr key={player.id} className="leaderboard-row" style={{ '--row-index': Math.min(index, 12) }}>
                     <td>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '60px' }}>
                         <span style={{ fontSize: '1.2em' }}>{getMedal(player.rank)}</span>
@@ -107,7 +107,7 @@ export default function LeaderboardScreen({ onHome }) {
                 );
               })}
               {scores.length === 0 && (
-                <tr><td colSpan="4" style={{textAlign:'center'}}>아직 등록된 기록이 없습니다!</td></tr>
+                <tr className="leaderboard-row"><td colSpan="4" style={{textAlign:'center'}}>아직 등록된 기록이 없습니다!</td></tr>
               )}
             </tbody>
           </table>

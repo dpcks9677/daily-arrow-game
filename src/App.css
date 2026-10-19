@@ -329,7 +329,45 @@ h2, h3 {
   margin-bottom: 2rem;
   backdrop-filter: blur(10px);
   max-height: 55vh;
+  min-height: 18rem; /* 로딩 → 표 전환 시 높이가 갑자기 변하지 않도록 */
   overflow-y: auto;
+}
+
+/* 로드가 빠른 경우 Loading...이 깜빡이지 않도록 잠시 뒤에 서서히 나타남 */
+.leaderboard-loading {
+  text-align: center;
+  color: #94a3b8;
+  opacity: 0;
+  animation: leaderboardFade 0.3s ease-out 0.25s forwards;
+}
+
+/* 로딩이 끝나면 표가 서서히 나타나고, 행은 위에서부터 차례로 올라옴 */
+.leaderboard-table {
+  animation: leaderboardFade 0.3s ease-out both;
+}
+
+.leaderboard-row {
+  animation: leaderboardRowIn 0.35s ease-out both;
+  animation-delay: calc(var(--row-index, 0) * 30ms);
+}
+
+@keyframes leaderboardFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes leaderboardRowIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaderboard-loading,
+  .leaderboard-table,
+  .leaderboard-row {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /* Custom Scrollbar for leaderboard */
