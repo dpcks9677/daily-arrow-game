@@ -1,6 +1,7 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 
 let discordSdkInstance = null;
+let discordAccessToken = null;
 
 /**
  * 현재 실행 환경이 디스코드 액티비티(Iframe) 내부인지 판별합니다.
@@ -28,6 +29,20 @@ export function isDiscordActivity() {
  */
 export function getDiscordSdk() {
   return discordSdkInstance;
+}
+
+/**
+ * Worker 요청(프로필 저장, 멀티플레이 RTDB/WebSocket)의 본인 확인에 쓰는 Discord access_token을 반환합니다.
+ */
+export function getDiscordAccessToken() {
+  return discordAccessToken;
+}
+
+/**
+ * Worker 호출 시 붙이는 인증 헤더를 반환합니다. (토큰이 없으면 빈 객체)
+ */
+export function getWorkerAuthHeaders() {
+  return discordAccessToken ? { Authorization: `Bearer ${discordAccessToken}` } : {};
 }
 
 /**
@@ -127,6 +142,8 @@ export async function initDiscordActivity() {
   if (!data.success || !data.access_token) {
     throw new Error(data.error || 'Discord API 인증 실패');
   }
+
+  discordAccessToken = data.access_token;
 
   // 4. 발급받은 access_token으로 Discord SDK 세션 최종 인증
   const auth = await discordSdkInstance.commands.authenticate({

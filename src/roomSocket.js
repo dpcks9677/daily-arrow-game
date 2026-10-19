@@ -1,17 +1,29 @@
 // 디스코드 액티비티 전용: 방 단위 WebSocket 중계 클라이언트.
 // 게임 중 진행도/실수를 폴링보다 빠르게 받기 위한 보조 채널이며, 연결에 실패해도
 // 기존 RTDB 폴링이 그대로 동작하므로 실패는 조용히 무시한다.
+import { getDiscordAccessToken } from './discordActivity';
 
 const PING_INTERVAL_MS = 5000;
 const MAX_FAILURES = 5;
 
+// 마지막 pong 수신 시각. 최근에 응답이 있었다면 WebSocket 중계가 정상 동작 중이므로
+// RTDB 폴링/진행도 전송 빈도를 낮춰 Worker 요청량을 줄일 수 있다.
+let lastPongAt = 0;
+export function isRelayHealthy() {
+  return Date.now() - lastPongAt < PING_INTERVAL_MS * 2 + 2000;
+}
+
 export function openRoomSocket(roomId, userId, { onMessage, onRtt } = {}) {
+  // Worker가 Discord 토큰으로 본인을 확인하므로, 토큰이 없으면 연결하지 않고 폴링만 쓴다
+  const token = getDiscordAccessToken();
+  if (!token) return { send() {}, close() {} };
+
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const bases = [
     `${proto}://${window.location.host}/.proxy/api/ws`,
     `${proto}://${window.location.host}/api/ws`,
   ];
-  const query = `?room=${encodeURIComponent(roomId)}&user=${encodeURIComponent(userId)}`;
+  const query = `?room=${encodeURIComponent(roomId)}&user=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`;
 
   let socket = null;
   let closed = false;
@@ -62,6 +74,7 @@ export function openRoomSocket(roomId, userId, { onMessage, onRtt } = {}) {
         return;
       }
       if (msg.t === 'pong') {
+        lastPongAt = Date.now();
         failures = 0; // 서버와 실제로 통신이 확인된 뒤에만 실패 횟수를 초기화 (열자마자 닫히는 서버에서 무한 재연결 방지)
         if (onRtt) onRtt(performance.now() - msg.c);
         return;

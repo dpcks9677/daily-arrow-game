@@ -1,6 +1,7 @@
 import { ref, set, get, update, remove, onValue, onDisconnect, serverTimestamp } from "firebase/database";
 import { rtdb } from "./firebase";
-import { isDiscordActivity } from "./discordActivity";
+import { isDiscordActivity, getWorkerAuthHeaders } from "./discordActivity";
+import { isRelayHealthy } from "./roomSocket";
 
 // ============================================================
 // 카운트다운 상수 (서버 타임스탬프 기반 동기화용)
@@ -62,6 +63,12 @@ function generateRoomCode() {
   return result;
 }
 
+// Worker 요청량 절감용 폴링 주기 (WebSocket 중계 정상 시 / 백그라운드 탭)
+const RELAY_POLL_INTERVAL_MS = 1000;
+const HIDDEN_POLL_INTERVAL_MS = 3000;
+// WebSocket 중계 정상 시 RTDB 진행도 기록 최소 간격 (실시간 표시는 WebSocket이 담당)
+const RELAY_PROGRESS_WRITE_INTERVAL_MS = 700;
+
 let workingRtdbBase = null;
 
 /**
@@ -92,7 +99,7 @@ async function rtdbFetch(path, method = 'GET', data = undefined) {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'X-HTTP-Method-Override': method
+          ...getWorkerAuthHeaders()
         },
         body
       });
@@ -196,10 +203,14 @@ export function subscribeRoom(roomId, callback, options = {}) {
           const data = await rtdbFetch(`rooms/${roomId}`, 'GET');
           if (active) {
             // 적응형 주기 전환: playing 상태면 빠르게, 아니면 느리게
+            // (Worker 요청량 절감: WebSocket 중계가 정상이면 진행도는 WS로 받으므로 폴링을 늦추고, 백그라운드 탭은 더 늦춘다)
             if (data?.status === 'playing') {
-              currentInterval = playingIntervalMs;
+              currentInterval = isRelayHealthy() ? RELAY_POLL_INTERVAL_MS : playingIntervalMs;
             } else {
               currentInterval = waitingIntervalMs;
+            }
+            if (typeof document !== 'undefined' && document.hidden) {
+              currentInterval = Math.max(currentInterval, HIDDEN_POLL_INTERVAL_MS);
             }
             callback(data);
           }
@@ -463,13 +474,14 @@ export async function leaveRoom(roomId, userId) {
     }
 
     if (isDiscordActivity()) {
-      await rtdbFetch(`rooms/${roomId}/players/${userId}`, 'DELETE');
+      // Worker는 다른 플레이어 항목을 방 참가자만 수정하게 하므로, 방장 승계를 마친 뒤 마지막에 내 항목을 지운다
       if (roomData.host === userId) {
         let nextHost = remainingUserIds.find(id => players[id]?.wantsReplay);
         if (!nextHost) nextHost = remainingUserIds[0];
-        await rtdbFetch(`rooms/${roomId}`, 'PATCH', { host: nextHost });
         await rtdbFetch(`rooms/${roomId}/players/${nextHost}`, 'PATCH', { isReady: true });
+        await rtdbFetch(`rooms/${roomId}`, 'PATCH', { host: nextHost });
       }
+      await rtdbFetch(`rooms/${roomId}/players/${userId}`, 'DELETE');
     } else {
       const roomRef = ref(rtdb, `rooms/${roomId}`);
       const updates = {};
@@ -553,6 +565,10 @@ export async function updateProgress(roomId, userId, progress) {
         const sentAt = pendingProgressAt;
         pendingProgress = null;
         await rtdbFetch(`rooms/${roomId}/players/${userId}`, 'PATCH', { progress: toSend, progressAt: sentAt });
+        // 중계가 정상이면 다음 기록까지 잠시 모아서(마지막 값만) 보낸다
+        if (pendingProgress !== null && isRelayHealthy()) {
+          await new Promise((resolve) => setTimeout(resolve, RELAY_PROGRESS_WRITE_INTERVAL_MS));
+        }
       }
     } catch (e) {
       console.warn("updateProgress error:", e);

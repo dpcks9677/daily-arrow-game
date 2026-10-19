@@ -10,7 +10,7 @@ import {
   clearStoredDiscordUser, 
   getDiscordAvatarUrl 
 } from './discordAuth';
-import { isDiscordActivity, initDiscordActivity } from './discordActivity';
+import { isDiscordActivity, initDiscordActivity, getWorkerAuthHeaders } from './discordActivity';
 
 import StartScreen from './components/StartScreen';
 import GameScreen from './components/GameScreen';
@@ -217,7 +217,7 @@ function App() {
               try {
                 const r = await fetch(ep, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 'Content-Type': 'application/json', ...getWorkerAuthHeaders() },
                   body: JSON.stringify({ id: canonicalId, profile: mergedProfile })
                 });
                 if (r.ok) break;
@@ -315,7 +315,7 @@ function App() {
           try {
             const r = await fetch(ep, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...getWorkerAuthHeaders() },
               body: JSON.stringify({ id: newProfile.id, profile: updates })
             });
             if (r.ok) break;

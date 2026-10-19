@@ -1,16 +1,47 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
     "rooms": {
-      ".read": true,
-      ".write": true
-    },
-    "voice_channel_rooms": {
-      ".read": true,
-      ".write": true
+      "$roomId": {
+        ".read": "$roomId.matches(/^[A-Za-z0-9]{4,12}$/)",
+        ".write": "$roomId.matches(/^[A-Za-z0-9]{4,12}$/)",
+        "host": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "status": { ".validate": "newData.val() == 'waiting' || newData.val() == 'playing' || newData.val() == 'finished'" },
+        "seed": { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "startedAt": { ".validate": "newData.isNumber()" },
+        "replayStartedAt": { ".validate": "newData.isNumber()" },
+        "countdownDuration": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60000" },
+        "isDiscordVoiceRoom": { ".validate": "newData.isBoolean()" },
+        "channelId": { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "players": {
+          "$playerId": {
+            ".validate": "$playerId.matches(/^[A-Za-z0-9_-]{1,64}$/)",
+            "nickname": { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "isReady": { ".validate": "newData.isBoolean()" },
+            "progress": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 50" },
+            "progressAt": { ".validate": "newData.isNumber()" },
+            "mistakes": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9999" },
+            "shake": { ".validate": "newData.isNumber()" },
+            "finishedAt": { ".validate": "newData.isNumber()" },
+            "finalTime": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 86400000" },
+            "rank": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 8" },
+            "isDisconnected": { ".validate": "newData.isBoolean()" },
+            "gaveUpAt": { ".validate": "newData.isNumber()" },
+            "wantsReplay": { ".validate": "newData.isBoolean()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
+      }
     },
     "_clock_sync": {
-      ".read": true,
-      ".write": true
+      "probe": {
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.isNumber()"
+      }
     }
   }
 }
