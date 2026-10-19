@@ -219,7 +219,8 @@ export default function StartScreen({
             </button>
           )}
 
-          {/* 6. 내 프로필 (맨 오른쪽) */}
+          {/* 6. 내 프로필 (맨 오른쪽, Discord 로그인 시에만 표시) */}
+          {discordUser && (
           <div className="custom-tooltip-wrapper">
             <button
               className={`icon-btn ${discordUser ? 'discord-avatar-btn' : ''}`}
@@ -257,6 +258,7 @@ export default function StartScreen({
             </button>
             <span className="custom-tooltip">{discordUser ? `${userProfile?.nickname || '프로필'} (Discord 연동됨)` : '내 프로필 (Discord 미연동)'}</span>
           </div>
+          )}
         </div>
       </div>
       <h1 className="main-title">
