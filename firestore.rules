@@ -5,7 +5,9 @@ service cloud.firestore {
     // users 컬렉션
     match /users/{userId} {
       allow read: if true;
-      allow write: if (!("currentStreak" in request.resource.data) || (request.resource.data.currentStreak >= 0 && request.resource.data.currentStreak <= 10000))
+      // 폐기된 백업 코드 필드는 다시 저장할 수 없다 (공개 읽기 문서에 계정 복구 비밀값이 노출되던 문제)
+      allow write: if !("backupCode" in request.resource.data)
+                   && (!("currentStreak" in request.resource.data) || (request.resource.data.currentStreak >= 0 && request.resource.data.currentStreak <= 10000))
                    && (!("totalLongestStreak" in request.resource.data) || (request.resource.data.totalLongestStreak >= 0 && request.resource.data.totalLongestStreak <= 10000))
                    && (!("totalPlayCount" in request.resource.data) || (request.resource.data.totalPlayCount >= 0 && request.resource.data.totalPlayCount <= 1000000));
     }
