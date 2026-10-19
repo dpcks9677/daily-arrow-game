@@ -89,7 +89,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
       setGameStatus('playing')
       setStartTime(performance.now())
 
-      if (userProfile && (userProfile.backupCode || userProfile.discordId)) {
+      if (userProfile && userProfile.discordId) {
         const todayStr = getKSTDateString();
         const dailyRecs = userProfile.dailyRecords || {};
         const todayDaily = dailyRecs[todayStr] || { todayPlayCount: 0, todayBestTime: Infinity, todayBestMistakes: Infinity, todayPlayTime: 0, todayMistakes: 0, todayTrials: 0 };
@@ -143,7 +143,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
   }, [handleKeyDown])
 
   const handleHomeClick = async () => {
-    if (gameStatus === 'playing' && userProfile && (userProfile.backupCode || userProfile.discordId)) {
+    if (gameStatus === 'playing' && userProfile && userProfile.discordId) {
       const currentAchievements = userProfile.achievements || [];
       if (!currentAchievements.includes('quit_once')) {
         const updatedAchievements = [...currentAchievements, 'quit_once'];
@@ -196,7 +196,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
       localStorage.setItem('arrow_game_nickname', nickname.trim());
       
       const timeSec = Number((timeElapsed / 1000).toFixed(2));
-      const hasBackupCode = !!(userProfile.backupCode || userProfile.discordId);
+      const hasBackupCode = !!userProfile.discordId;
 
       // 1. 디스코드 액티비티 환경(CSP 제약)을 위해 Worker Proxy 우선 시도
       let savedViaProxy = false;
@@ -282,7 +282,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
       } catch(err) { console.error('Error checking top_1:', err); }
 
       const currentAchievements = userProfile?.achievements || [];
-      const actualNew = (userProfile?.backupCode || userProfile?.discordId) ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
+      const actualNew = userProfile?.discordId ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
       
       const updates = {
         nickname: nickname.trim()

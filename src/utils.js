@@ -59,7 +59,7 @@ export function processGameCompletion(userProfile, timeSec, mistakes) {
     if (newStreak >= 7) newUnlocked.push('streak_7');
 
     const currentAchievements = userProfile.achievements || [];
-    const isProfileRegistered = !!(userProfile.backupCode || userProfile.discordId);
+    const isProfileRegistered = !!userProfile.discordId;
     const actualNew = isProfileRegistered ? newUnlocked.filter(id => !currentAchievements.includes(id)) : [];
     const updatedAchievements = [...currentAchievements, ...actualNew];
 
@@ -195,18 +195,6 @@ export function getArrowSymbol(key) {
         case 'ArrowRight': return '→';
         default: return '';
     }
-}
-
-/**
- * @deprecated Legacy backup code generation. Deprecated in favor of Discord authentication.
- */
-export function generateBackupCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 8; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result.slice(0, 4) + '-' + result.slice(4);
 }
 
 const SECRET_KEY = import.meta.env.VITE_APP_SECRET || 'daily_arrow_secure_key_2026_!@#';

@@ -189,7 +189,6 @@ function App() {
             discordGlobalName: activeDiscordUser.global_name,
             discordAvatar: discordAvatar,
             nickname: baseData.nickname || discordNickname,
-            backupCode: baseData.backupCode || null,
             currentStreak: baseData.currentStreak || 0,
             lastPlayedDate: baseData.lastPlayedDate || '',
             achievements: baseData.achievements || [],
@@ -251,14 +250,13 @@ function App() {
             }
           };
 
-          if (localData && (localData.backupCode || localData.discordId)) {
+          if (localData && localData.discordId) {
             await fetchAndMerge({ ...localData, id: deviceId });
           } else if (localData) {
             setUserProfile({ ...localData, id: deviceId });
           } else {
             const newProfile = {
               id: deviceId,
-              backupCode: null,
               nickname: localStorage.getItem('arrow_game_nickname') || '',
               currentStreak: 0,
               lastPlayedDate: '',
@@ -309,7 +307,7 @@ function App() {
     const newProfile = { ...currentProfile, ...updates };
     setUserProfile(newProfile);
     saveSecureProfile(newProfile);
-    if (newProfile.backupCode || newProfile.discordId) {
+    if (newProfile.discordId) {
       if (isDiscordActivity()) {
         const baseAuthUrl = import.meta.env.VITE_AUTH_SERVER_URL ? import.meta.env.VITE_AUTH_SERVER_URL.replace(/\/$/, '') : '';
         const epList = ['/api/user-profile', '/.proxy/api/user-profile', baseAuthUrl ? `${baseAuthUrl}/api/user-profile` : null].filter(Boolean);

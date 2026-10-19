@@ -231,7 +231,7 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
 
   // Update Stats when all finished
   useEffect(() => {
-    if (isAllFinished && roomData && !statsSavedRef.current && userProfile && (userProfile.backupCode || userProfile.discordId)) {
+    if (isAllFinished && roomData && !statsSavedRef.current && userProfile && userProfile.discordId) {
       statsSavedRef.current = true;
       const players = roomData.players;
       const myData = players[userId];
@@ -327,7 +327,7 @@ export default function MultiplayerGameScreen({ onHome, onReplay, userProfile, m
       await giveUpGame(roomId, userId);
       
       // Update stats for unplug
-      if (userProfile && (userProfile.backupCode || userProfile.discordId)) {
+      if (userProfile && userProfile.discordId) {
         saveProfile(userProfile, {
           multiplayerPlays: (userProfile.multiplayerPlays || 0) + 1
           // completions is NOT incremented

@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft as LucideLeft, ArrowRight as LucideRight, HelpCircle, Sun, Moon, User, Pencil, Flame, Trophy, BarChart, AlertCircle, LogOut } from 'lucide-react';
-import { collection, doc, setDoc, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../firebase';
-import { getByteLength, saveSecureProfile, getKSTDate, getKSTDateString, getStreakStatus } from '../utils';
+import { getByteLength, getKSTDate, getKSTDateString, getStreakStatus } from '../utils';
 import { ACHIEVEMENTS } from '../constants';
 import { DiscordIcon } from './DiscordIcon';
 
@@ -13,7 +11,6 @@ export default function StartScreen({
   isDarkMode,
   toggleTheme,
   userProfile,
-  setUserProfile,
   saveProfile,
   setUnlockedPopups,
   isAuthLoading,
@@ -29,23 +26,12 @@ export default function StartScreen({
   const [showAchievements, setShowAchievements] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
   const [statsPage, setStatsPage] = useState(0);
-  const [recoverCode, setRecoverCode] = useState('');
-  const [isRecovering, setIsRecovering] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [editNicknameValue, setEditNicknameValue] = useState('');
-  const [showLegacyBackup, setShowLegacyBackup] = useState(false);
   const [debugTime, setDebugTime] = useState(9.5);
   const [debugMistakes, setDebugMistakes] = useState(0);
   const [nicknameError, setNicknameError] = useState('');
   const [showDebug, setShowDebug] = useState(false);
-
-  const handleRecoverCodeChange = (e) => {
-    let val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    if (val.length > 4) {
-      val = val.slice(0, 4) + '-' + val.slice(4, 8);
-    }
-    setRecoverCode(val.slice(0, 9));
-  };
 
   // 프로필 창이 열리거나 프로필이 바뀌면 닉네임 편집 상태를 동기화 (렌더 중 상태 조정)
   const [syncedProfile, setSyncedProfile] = useState({ showProfile: false, userProfile: null });
@@ -98,67 +84,8 @@ export default function StartScreen({
     }
   };
 
-  // 과거 백업 코드를 현재 계정(또는 디스코드 계정)으로 마이그레이션/복구
-  const handleRecover = async () => {
-    if (!recoverCode.trim()) {
-      if (showToast) showToast("백업 코드를 입력해주세요.", "error");
-      return;
-    }
-    setIsRecovering(true);
-    try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('backupCode', '==', recoverCode.trim().toUpperCase()));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        if (showToast) showToast("일치하는 계정을 찾을 수 없습니다. 코드를 확인해주세요.", "error");
-      } else {
-        const matchedDoc = querySnapshot.docs[0];
-        const oldData = matchedDoc.data();
-
-        const deviceId = userProfile.id;
-
-        // 디스코드 계정이 연동되어 있다면 디스코드 식별 정보를 유지하면서 전적을 이전
-        const discordFields = discordUser ? {
-          discordId: userProfile.discordId || discordUser.id,
-          discordUsername: userProfile.discordUsername || discordUser.username,
-          discordGlobalName: userProfile.discordGlobalName || discordUser.global_name,
-          discordAvatar: userProfile.discordAvatar || null,
-        } : {};
-
-        const mergedProfile = {
-          ...oldData,
-          ...discordFields,
-          id: deviceId
-        };
-
-        // Firestore에 현재 deviceId 문서로 저장
-        await setDoc(doc(db, 'users', deviceId), mergedProfile, { merge: true });
-
-        setUserProfile(mergedProfile);
-        saveSecureProfile(mergedProfile);
-        if (mergedProfile.nickname) {
-          localStorage.setItem('arrow_game_nickname', mergedProfile.nickname);
-        }
-
-        if (showToast) {
-          showToast(discordUser
-            ? "과거 백업 코드의 전적이 현재 Discord 계정으로 성공적으로 이전되었습니다!"
-            : "계정 데이터가 성공적으로 복구되었습니다!", "success");
-        }
-        setShowProfile(false);
-        setRecoverCode('');
-      }
-    } catch (e) {
-      console.error(e);
-      if (showToast) showToast("복구 중 오류가 발생했습니다.", "error");
-    } finally {
-      setIsRecovering(false);
-    }
-  };
-
   const { isActive, streak, isPlayedToday } = getStreakStatus(userProfile);
-  const isProfileRegistered = !!(userProfile?.backupCode || userProfile?.discordId);
+  const isProfileRegistered = !!userProfile?.discordId;
 
   return (
     <div className="start-screen">
@@ -983,37 +910,6 @@ export default function StartScreen({
                       {nicknameError || "안내 멘트 영역"}
                     </p>
                   </div>
-                </div>
-
-                {/* 3. 과거 백업 코드 데이터 이전 창구 (기존 유저용 접이식) */}
-                <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.85rem', width: '100%' }}>
-                  <button
-                    onClick={() => setShowLegacyBackup(!showLegacyBackup)}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline', width: '100%', textAlign: 'center' }}
-                  >
-                    {showLegacyBackup ? '▲ 과거 백업 코드 가져오기 닫기' : '▼ 과거 백업 코드로 데이터 가져오기'}
-                  </button>
-                  {showLegacyBackup && (
-                    <div className="legacy-backup-box" style={{ marginTop: '0.8rem', background: 'rgba(30, 58, 138, 0.25)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                      <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: '0 0 0.5rem 0', textAlign: 'center', lineHeight: '1.4' }}>
-                        이전에 발급받은 8자리 백업 코드가 있다면 입력하여<br />기존 스트릭과 기록을 불러옵니다.
-                      </p>
-                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                        <input
-                          type="text"
-                          value={recoverCode}
-                          onChange={handleRecoverCodeChange}
-                          placeholder="백업 코드 입력"
-                          className="nickname-input"
-                          maxLength={9}
-                          style={{ width: '140px', textTransform: 'uppercase', textAlign: 'center', fontSize: '0.8rem', padding: '0.35rem' }}
-                        />
-                        <button onClick={handleRecover} disabled={isRecovering} className="primary-btn" style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem', borderRadius: '6px' }}>
-                          {isRecovering ? '가져오는 중...' : '불러오기'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </>
             )}
