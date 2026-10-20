@@ -92,11 +92,13 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
 
   const processInput = useCallback((key) => {
     if (isStunnedRef.current || gameStatusRef.current === 'finished') return;
+    // 입력 시각은 맨 앞에서 한 번만 잰다. 아래 프로필 저장(암호화 등)이 끼어들면 첫 입력 t가 0이 아니게 되어 서버가 기록을 거부한다.
+    const now = performance.now();
 
     if (gameStatusRef.current === 'waiting') {
       setGameStatus('playing')
-      setStartTime(performance.now())
-      runStartRef.current = performance.now()
+      setStartTime(now)
+      runStartRef.current = now
       // 첫 입력 시 서버에 라운드 시작을 알린다 (서버가 시작 시각을 서명해 돌려줌)
       roundRef.current = callWorker('/start-round', { body: { seed: getDailySeed().toString() } })
         .then((r) => (r.ok ? r.data.round : null))
@@ -123,7 +125,7 @@ export default function GameScreen({ onHome, onLeaderboard, userProfile, savePro
     }
 
     const expectedArrow = arrows[currentIndexRef.current];
-    runLogRef.current.push([ARROW_KEYS.indexOf(key), Math.round(performance.now() - runStartRef.current), key === expectedArrow ? 1 : 0]);
+    runLogRef.current.push([ARROW_KEYS.indexOf(key), Math.round(now - runStartRef.current), key === expectedArrow ? 1 : 0]);
 
     if (key === expectedArrow) {
       const nextIndex = currentIndexRef.current + 1;
